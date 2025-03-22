@@ -29,6 +29,8 @@ def load_state_dict(model_dir, is_multi_gpu):
         return state_dict
 
 def main(args):
+    if not os.path.exists("./logs/"):
+        os.makedirs("./logs/")
     if 0 == len(args.resume):
         logger = Logger('./logs/'+args.model+'.log')
     else:
