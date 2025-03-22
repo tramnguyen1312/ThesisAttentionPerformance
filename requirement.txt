@@ -6,3 +6,6 @@ click
 opencv-python
 matplotlib
 tqdm
+tensorboardX
+torchnet
+pretrainedmodels
