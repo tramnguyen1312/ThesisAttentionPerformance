@@ -79,7 +79,7 @@ def main(args):
         attention_block = ChannelSpatialSELayer
 
     if  'resnet50' == args.model.split('_')[0]:
-        my_model = resnet_cbam.resnet50(pretrained=False, attention_block=attention_block)
+        my_model = resnet_cbam.resnet50(pretrained=True, attention_block=attention_block)
     elif 'resnet101' == args.model.split('_')[0]:
         my_model = resnet_cbam.resnet101(pretrained=False, attention_block=attention_block)
     else:
