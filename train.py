@@ -29,12 +29,12 @@ def load_state_dict(model_dir, is_multi_gpu):
         return state_dict
 
 def main(args):
-    if not os.path.exists("./logs/"):
-        os.makedirs("./logs/")
+    if not os.path.exists("/kaggle/working/logs"):
+        os.makedirs("/kaggle/working/logs")
     if 0 == len(args.resume):
-        logger = Logger('./logs/'+args.model+'.log')
+        logger = Logger('"/kaggle/working/logs"/'+args.model+'.log')
     else:
-        logger = Logger('./logs/'+args.model+'.log', True)
+        logger = Logger('"/kaggle/working/logs"/'+args.model+'.log', True)
 
     logger.append(vars(args))
 
