@@ -81,7 +81,7 @@ def main(args):
     if  'resnet50' == args.model.split('_')[0]:
         my_model = resnet_cbam.resnet50(pretrained=False, attention_block=attention_block)
     elif 'resnet101' == args.model.split('_')[0]:
-        my_model = resnet_cbam.resnet101(pretrained=False, attention_block=CBAMBlock)
+        my_model = resnet_cbam.resnet101(pretrained=False, attention_block=attention_block)
     else:
         raise ModuleNotFoundError
 
@@ -133,7 +133,7 @@ if __name__ == '__main__':
                          type=str, help='train file')
     parser.add_argument('-v', '--val_file', default='./datasets/val.txt',
                          type=str, help='validation file')
-    parser.add_argument('-m', '--model', default='resnet101',
+    parser.add_argument('-m', '--model', default='resnet50',
                          type=str, help='model type')
     parser.add_argument('--batch_size', default=12,
                          type=int, help='model train batch size')

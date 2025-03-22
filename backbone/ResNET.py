@@ -2,9 +2,7 @@ import torch
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
-from attention.CBAM import CBAMBlock
-from attention.BAM import BAMBlock
-from attention.scSE import ChannelSpatialSELayer
+
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152']
@@ -252,7 +250,7 @@ def resnet152(pretrained=False, **kwargs):
     return model
 
 if __name__ == '__main__':
-    model = resnet50(pretrained=False, attention_block=BAMBlock)
+    model = resnet50(pretrained=False)
     # In kiến trúc model
     print("Model structure:")
     print(model)
