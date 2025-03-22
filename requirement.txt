@@ -1,0 +1,8 @@
+numpy
+torch
+torchvision
+Pillow
+click
+opencv-python
+matplotlib
+tqdm
