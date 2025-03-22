@@ -32,7 +32,7 @@ def main(args):
     if not os.path.exists("/kaggle/working/logs"):
         os.makedirs("/kaggle/working/logs")
     if 0 == len(args.resume):
-        logger = Logger('/kaggle/working/logs/'+args.model+'.log')
+        logger = Logger('./logs/'+args.model+'.log')
     else:
         logger = Logger('/kaggle/working/logs/'+args.model+'.log', True)
 
@@ -92,9 +92,21 @@ def main(args):
     start_epoch = 0
     num_epochs  = args.epochs
 
-    my_trainer = Trainer(my_model, args.model, loss_fn, optimizer, lr_schedule, 500, is_use_cuda, train_dataloaders, \
-                        val_dataloaders, metric, start_epoch, num_epochs, args.debug, logger, writer)
-    my_trainer.fit()
+    trainer = Trainer(
+        model=my_model,
+        optimizer=optimizer,
+        scheduler=lr_schedule,
+        train_dataloader=train_dataloaders,
+        val_dataloader=val_dataloaders,
+        criterion=nn.CrossEntropyLoss(),
+        max_epochs=100,
+        max_plateau_count=10,
+        min_lr=1e-5,
+        checkpoint_path="best_model.pth",
+        output_csv_path="training_log.csv",
+    )
+
+    trainer.fit()
     logger.append('Optimize Done!')
 
 
