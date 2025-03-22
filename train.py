@@ -70,8 +70,16 @@ def main(args):
     is_use_cuda = torch.cuda.is_available()
     cudnn.benchmark = True
 
+    attention_block = None
+    if args.attention == 'CBAM':
+        attention_block = CBAMBlock
+    elif args.attention == 'BAM':
+        attention_block = BAMBlock
+    elif args.attention == 'SCSE':
+        attention_block = ChannelSpatialSELayer
+
     if  'resnet50' == args.model.split('_')[0]:
-        my_model = resnet_cbam.resnet50(pretrained=False, attention_block=CBAMBlock)
+        my_model = resnet_cbam.resnet50(pretrained=False, attention_block=attention_block)
     elif 'resnet101' == args.model.split('_')[0]:
         my_model = resnet_cbam.resnet101(pretrained=False, attention_block=CBAMBlock)
     else:
@@ -131,6 +139,7 @@ if __name__ == '__main__':
                          type=int, help='model train batch size')
     parser.add_argument('--epochs', type=int, default=10,
                         help='Use TensorboardX to Display')
+    parser.add_argument('--attention', type=str, default="CBAM")
     args = parser.parse_args()
 
     main(args)
