@@ -32,9 +32,9 @@ def main(args):
     if not os.path.exists("/kaggle/working/logs"):
         os.makedirs("/kaggle/working/logs")
     if 0 == len(args.resume):
-        logger = Logger('"/kaggle/working/logs"/'+args.model+'.log')
+        logger = Logger('/kaggle/working/logs/'+args.model+'.log')
     else:
-        logger = Logger('"/kaggle/working/logs"/'+args.model+'.log', True)
+        logger = Logger('/kaggle/working/logs/'+args.model+'.log', True)
 
     logger.append(vars(args))
 
