@@ -5,6 +5,7 @@ from torch.autograd import Variable
 import time
 import sys
 import os
+from torch.utils.tensorboard import SummaryWriter
 
 class Trainer():
     def __init__(self, model, model_type, loss_fn, optimizer, lr_schedule, log_batchs, is_use_cuda, train_data_loader, \
@@ -28,6 +29,7 @@ class Trainer():
         self.best_loss = sys.float_info.max
         self.logger = logger
         self.writer = writer
+
 
     def fit(self):
         for epoch in range(0, self.start_epoch):

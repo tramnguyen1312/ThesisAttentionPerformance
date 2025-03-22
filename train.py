@@ -38,10 +38,9 @@ def main(args):
 
     logger.append(vars(args))
 
-    if args.display:
-        writer = SummaryWriter()
-    else:
-        writer = None
+
+    writer = SummaryWriter()
+
 
     gpus = args.gpu.split(',')
     data_transforms = {
@@ -91,7 +90,7 @@ def main(args):
 
     metric = [ClassErrorMeter([1,5], True)]
     start_epoch = 0
-    num_epochs  = 1
+    num_epochs  = args.epochs
 
     my_trainer = Trainer(my_model, args.model, loss_fn, optimizer, lr_schedule, 500, is_use_cuda, train_dataloaders, \
                         val_dataloaders, metric, start_epoch, num_epochs, args.debug, logger, writer)
@@ -118,7 +117,7 @@ if __name__ == '__main__':
                          type=str, help='model type')
     parser.add_argument('--batch_size', default=12,
                          type=int, help='model train batch size')
-    parser.add_argument('--display', action='store_true', dest='display',
+    parser.add_argument('--epochs', type=int, default=10,
                         help='Use TensorboardX to Display')
     args = parser.parse_args()
 
