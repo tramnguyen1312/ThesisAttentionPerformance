@@ -649,7 +649,7 @@ class RAFDB_Trainer(Trainer):
 
 
 configs = {
-    "raf_path": "/kaggle/input/rafdb-basic",
+    "raf_path": "/kaggle/input/rafdb-basic/rafdb_basic",
     "image_path": "rafdb_basic/Image/aligned/",
     "label_path": "rafdb_basic/EmoLabel/list_patition_label.txt",
     "image_size": 224,
@@ -686,3 +686,6 @@ test_loader = RafDataSet("test", configs, ttau = False, len_tta = 48)
 model = resnet_cbam.resnet50(pretrained=False, attention_block=None)
 for name, layer in model.named_children():
     print(f"{name}: {layer}")
+
+trainer = RAFDB_Trainer(model, train_loader, test_loader, test_loader, test_loader_ttau, configs, output_csv_path="./dataset")
+trainer.Train_model()
