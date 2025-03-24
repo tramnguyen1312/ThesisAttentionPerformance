@@ -116,7 +116,6 @@ class Trainer:
             "val_acc_list": self.val_acc_list,
             "optimizer": self.optimizer.state_dict(),
         }
-
         torch.save(state, self.checkpoint_path)
         print(f"Model weights saved to {self.checkpoint_path}")
 
