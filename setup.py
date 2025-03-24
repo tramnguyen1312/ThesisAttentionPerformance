@@ -649,7 +649,7 @@ class RAFDB_Trainer(Trainer):
 
 
 configs = {
-    "raf_path": "/kaggle/input/d/dntai2/rafdb-basic/rafdb_basic",
+    "raf_path": "/kaggle/input/d/dntai2/rafdb-basic",
     "image_path": "rafdb_basic/Image/aligned/",
     "label_path": "rafdb_basic/EmoLabel/list_patition_label.txt",
     "image_size": 224,
