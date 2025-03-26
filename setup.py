@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-import backbone.ResNET as resnet_cbam
+import backbone.ResNet2 as resnet_cbam
 
 import torch.optim as optim
 from torch.autograd import Variable
@@ -683,7 +683,8 @@ train_loader = RafDataSet( "train", configs)
 test_loader_ttau = RafDataSet("test", configs, ttau = True, len_tta = 10)
 test_loader = RafDataSet("test", configs, ttau = False, len_tta = 48)
 
-model = resnet_cbam.resnet50(pretrained=False, attention_block=None)
+
+model = resnet_cbam.resnet50(pretrained=False, attention_type='cbam')
 for name, layer in model.named_children():
     print(f"{name}: {layer}")
 

@@ -77,7 +77,7 @@ class SpatialSELayer(nn.Module):
         return output_tensor
 
 
-class ChannelSpatialSELayer(nn.Module):
+class scSEBlock(nn.Module):
     """
     Re-implementation of concurrent spatial and channel squeeze & excitation:
         *Roy et al., Concurrent Spatial and Channel Squeeze & Excitation in Fully Convolutional Networks, MICCAI 2018, arXiv:1803.02579*
@@ -88,7 +88,7 @@ class ChannelSpatialSELayer(nn.Module):
         :param channels: No of input channels
         :param reduction_ratio: By how much should the channels should be reduced
         """
-        super(ChannelSpatialSELayer, self).__init__()
+        super(scSEBlock, self).__init__()
         self.cSE = ChannelSELayer(channels, reduction_ratio)
         self.sSE = SpatialSELayer(channels)
 
@@ -103,6 +103,6 @@ class ChannelSpatialSELayer(nn.Module):
 
 if __name__ == '__main__':
     input=torch.randn(50,512,7,7)
-    scse = ChannelSpatialSELayer(channels=512, reduction_ratio=2)
+    scse = scSEBlock(channels=512, reduction_ratio=2)
     output = scse(input)
     print(output)
