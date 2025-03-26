@@ -33,7 +33,7 @@ class ResNet50(torch.nn.Module):
 
     def forward(self, x):
         # Attention trước khi vào ResNet
-        if self.use_attention:
+        if self.attention_type is not None:
             x = self.input_attention_module(x)
 
         # Qua ResNet
