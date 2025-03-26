@@ -684,7 +684,7 @@ test_loader_ttau = RafDataSet("test", configs, ttau = True, len_tta = 10)
 test_loader = RafDataSet("test", configs, ttau = False, len_tta = 48)
 
 
-model = resnet_cbam.ResNet50(pretrained=False, attention_type='cbam')
+model = resnet_cbam.ResNet50(pretrained=False, attention_type=None)
 for name, layer in model.named_children():
     print(f"{name}: {layer}")
 
