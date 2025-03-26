@@ -9,7 +9,7 @@ class ResNet50(torch.nn.Module):
         super().__init__()
         # Load mô hình ResNet50 cơ bản
         self.resnet = ptcv_get_model("resnet50", pretrained=pretrained)
-
+        self.attention_type = attention_type
         if self.attention_type is not None:
             self.attention_type = attention_type.lower()
             self.input_attention_module = self._get_attention_module(channel=3)
