@@ -83,14 +83,14 @@ class scSEBlock(nn.Module):
         *Roy et al., Concurrent Spatial and Channel Squeeze & Excitation in Fully Convolutional Networks, MICCAI 2018, arXiv:1803.02579*
     """
 
-    def __init__(self, channels, reduction_ratio=2):
+    def __init__(self, channel, reduction_ratio=2):
         """
         :param channels: No of input channels
         :param reduction_ratio: By how much should the channels should be reduced
         """
         super(scSEBlock, self).__init__()
-        self.cSE = ChannelSELayer(channels, reduction_ratio)
-        self.sSE = SpatialSELayer(channels)
+        self.cSE = ChannelSELayer(channel, reduction_ratio)
+        self.sSE = SpatialSELayer(channel)
 
     def forward(self, input_tensor):
         """

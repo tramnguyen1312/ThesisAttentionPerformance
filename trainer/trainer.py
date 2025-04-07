@@ -1,188 +1,223 @@
-import torch
 import os
-import csv
+import datetime
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.optim.lr_scheduler import (
+    ReduceLROnPlateau,
+    StepLR,
+    CosineAnnealingLR,
+    CosineAnnealingWarmRestarts,
+)
+import tqdm
+from torch.utils.data import DataLoader
+import wandb  # Import wandb for logging
+
 
 class Trainer:
-    def __init__(self, model, optimizer, scheduler, train_dataloader, val_dataloader,
-                 criterion, max_epochs, max_plateau_count, min_lr, checkpoint_path,
-                 output_csv_path, debug=False):
-        # Model, Optimizer, Scheduler, Loss Function
-        self.model = model
-        self.optimizer = optimizer
-        self.scheduler = scheduler
-        self.criterion = criterion
+    """Base trainer class."""
+    def __init__(self):
+        pass
 
-        # Dataloader
-        self.train_dataloader = train_dataloader
-        self.val_dataloader = val_dataloader
 
-        # Training settings
-        self.max_epochs = max_epochs
-        self.max_plateau_count = max_plateau_count
-        self.min_lr = min_lr
-        self.debug = debug
+class DatasetTrainer(Trainer):
+    """General Dataset Trainer with WandB integration."""
 
-        # Paths
-        self.checkpoint_path = checkpoint_path
-        self.output_csv_path = output_csv_path
+    def __init__(self, model, train_loader, val_loader, test_loader, configs, wb=False):
+        """
+        Initialize the trainer.
+        :param model: PyTorch model.
+        :param train_loader: DataLoader for training set.
+        :param val_loader: DataLoader for validation set.
+        :param test_loader: DataLoader for testing set.
+        :param configs: Configuration dictionary with hyperparameters.
+        :param wb: Boolean to enable WandB logging (default False).
+        """
+        super().__init__()
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.test_loader = test_loader
+        self.configs = configs
+        self.wb = wb
 
-        # Training state tracking
-        self.current_epoch_num = 0
-        self.plateau_count = 0
-        self.best_val_acc = 0
-        self.best_val_loss = float('inf')
-        self.best_train_acc = 0
-        self.best_train_loss = float('inf')
-        self.train_loss_list = []
-        self.train_acc_list = []
-        self.val_loss_list = []
-        self.val_acc_list = []
-        self.test_acc = 0
-        self.test_acc_ttau = 0
+        # Device setup
+        self.device = torch.device(configs["device"])
+        self.model = model.to(self.device)
 
-    def train_one_epoch(self):
+        # Hyperparameters
+        self.batch_size = configs["batch_size"]
+        self.learning_rate = configs["lr"]
+        self.min_lr = configs["min_lr"]
+        self.weight_decay = configs["weight_decay"]
+        self.optimizer_choice = configs["optimizer"]
+        self.scheduler_choice = configs["lr_scheduler"]
+        self.max_epochs = configs["max_epoch_num"]
+        self.best_val_acc = 0.0
+
+        # Optimizer, Scheduler, and Loss
+        self.optimizer = self._initialize_optimizer()
+        self.scheduler = self._initialize_scheduler()
+        self.criterion = nn.CrossEntropyLoss().to(self.device)
+
+        # Checkpoint and Logging
+        self.start_time = datetime.datetime.now()
+        self.checkpoint_path = configs.get("checkpoint_path", "best_model.pth")
+
+        # WandB setup
+        if self.wb:
+            self._initialize_wandb()
+
+    def _initialize_optimizer(self):
+        """Set up the optimizer."""
+        if self.optimizer_choice == "Adam":
+            return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        elif self.optimizer_choice == "SGD":
+            return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.9, weight_decay=self.weight_decay)
+        elif self.optimizer_choice == "RAdam":
+            return torch.optim.RAdam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        else:
+            raise ValueError(f"Unsupported optimizer: {self.optimizer_choice}.")
+
+    def _initialize_scheduler(self):
+        """Set up the learning rate scheduler."""
+        if self.scheduler_choice == "ReduceLROnPlateau":
+            return ReduceLROnPlateau(self.optimizer, patience=5, factor=0.1, min_lr=self.min_lr, verbose=True)
+        elif self.scheduler_choice == "StepLR":
+            return StepLR(self.optimizer, step_size=10, gamma=0.1)
+        elif self.scheduler_choice == "CosineAnnealingLR":
+            return CosineAnnealingLR(self.optimizer, T_max=10, eta_min=self.min_lr, verbose=True)
+        elif self.scheduler_choice == "CosineAnnealingWarmRestarts":
+            return CosineAnnealingWarmRestarts(self.optimizer, T_0=10, T_mult=2, eta_min=self.min_lr, verbose=True)
+        else:
+            print("No learning rate scheduler selected.")
+            return None
+
+    def _initialize_wandb(self):
+        """Initialize WandB."""
+        wandb.login(key=self.configs["wandb_api_key"])
+        wandb.init(
+            project=self.configs["project_name"],
+            name=self.configs.get("run_name", f"run_{datetime.datetime.now()}"),
+            config=self.configs,
+        )
+        wandb.watch(self.model, log="all", log_freq=10)
+        print("WandB initialized.")
+
+    def train_one_epoch(self, epoch):
+        """Train the model for one epoch."""
         self.model.train()
         running_loss = 0.0
         correct = 0
         total = 0
 
-        for inputs, labels in self.train_dataloader:
-            inputs, labels = inputs.cuda(), labels.cuda()
-
-            # Zero optimizer gradients
-            self.optimizer.zero_grad()
+        for batch_idx, (images, labels) in tqdm.tqdm(
+                enumerate(self.train_loader),
+                total=len(self.train_loader),
+                desc=f"Epoch {epoch}/{self.max_epochs} [Training]",
+                leave=False):
+            images, labels = images.to(self.device), labels.to(self.device)
 
             # Forward pass
-            outputs = self.model(inputs)
+            outputs = self.model(images)
             loss = self.criterion(outputs, labels)
 
-            # Backward pass and optimizer step
+            # Backward pass and optimization
+            self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
 
-            # Update metrics
-            running_loss += loss.item() * inputs.size(0)
-            _, predicted = torch.max(outputs, 1)
-            correct += (predicted == labels).sum().item()
+            # Track metrics
+            running_loss += loss.item()
+            _, predicted = outputs.max(1)
             total += labels.size(0)
+            correct += predicted.eq(labels).sum().item()
 
-        # Logging for training epoch
-        epoch_loss = running_loss / len(self.train_dataloader.dataset)
-        epoch_acc = correct / total
-        self.train_loss_list.append(epoch_loss)
-        self.train_acc_list.append(epoch_acc)
-        print(f"Train Epoch {self.current_epoch_num}: Loss={epoch_loss:.4f}, Accuracy={epoch_acc:.4f}")
+        avg_loss = running_loss / len(self.train_loader)
+        accuracy = 100.0 * correct / total
 
-    def validate_one_epoch(self):
+        # Log to WandB
+        if self.wb:
+            wandb.log({"Train Loss": avg_loss, "Train Accuracy": accuracy})
+
+        print(f"Train Loss: {avg_loss:.4f}, Train Accuracy: {accuracy:.2f}%")
+        return avg_loss, accuracy
+
+    def validate_one_epoch(self, epoch):
+        """Validate the model for one epoch."""
         self.model.eval()
-        running_loss = 0.0
+        val_loss = 0.0
         correct = 0
         total = 0
 
         with torch.no_grad():
-            for inputs, labels in self.val_dataloader:
-                inputs, labels = inputs.cuda(), labels.cuda()
+            for batch_idx, (images, labels) in tqdm.tqdm(
+                    enumerate(self.val_loader),
+                    total=len(self.val_loader),
+                    desc=f"Epoch {epoch}/{self.max_epochs} [Validation]",
+                    leave=False):
+                images, labels = images.to(self.device), labels.to(self.device)
 
                 # Forward pass
-                outputs = self.model(inputs)
+                outputs = self.model(images)
                 loss = self.criterion(outputs, labels)
 
-                # Update metrics
-                running_loss += loss.item() * inputs.size(0)
-                _, predicted = torch.max(outputs, 1)
-                correct += (predicted == labels).sum().item()
+                val_loss += loss.item()
+                _, predicted = outputs.max(1)
                 total += labels.size(0)
+                correct += predicted.eq(labels).sum().item()
 
-        # Logging for validation epoch
-        val_loss = running_loss / len(self.val_dataloader.dataset)
-        val_acc = correct / total
-        self.val_loss_list.append(val_loss)
-        self.val_acc_list.append(val_acc)
-        print(f"Validation Epoch {self.current_epoch_num}: Loss={val_loss:.4f}, Accuracy={val_acc:.4f}")
-        return val_loss, val_acc
+        avg_loss = val_loss / len(self.val_loader)
+        accuracy = 100.0 * correct / total
 
-    def save_weights(self):
-        state_dict = self.model.state_dict()
+        # Log to WandB
+        if self.wb:
+            wandb.log({"Validation Loss": avg_loss, "Validation Accuracy": accuracy})
 
-        state = {
-            "net": state_dict,
-            "best_val_loss": self.best_val_loss,
-            "best_val_acc": self.best_val_acc,
-            "best_train_loss": self.best_train_loss,
-            "best_train_acc": self.best_train_acc,
-            "train_loss_list": self.train_loss_list,
-            "val_loss_list": self.val_loss_list,
-            "train_acc_list": self.train_acc_list,
-            "val_acc_list": self.val_acc_list,
-            "optimizer": self.optimizer.state_dict(),
-        }
-        torch.save(state, self.checkpoint_path)
-        print(f"Model weights saved to {self.checkpoint_path}")
+        print(f"Validation Loss: {avg_loss:.4f}, Validation Accuracy: {accuracy:.2f}%")
+        return avg_loss, accuracy
 
-    def update_output_csv(self, epoch, lr, accuracy, loss, val_accuracy, val_loss):
-        file_exists = os.path.isfile(self.output_csv_path)
-        with open(self.output_csv_path, mode='a', newline='') as csv_file:
-            writer = csv.writer(csv_file)
-            if not file_exists:
-                # Write header once
-                writer.writerow(['epoch', 'lr', 'accuracy', 'loss', 'val_accuracy', 'val_loss'])
-            writer.writerow([epoch, lr, accuracy, loss, val_accuracy, val_loss])
+    def test_model(self):
+        """Evaluate the model on the test set."""
+        self.model.eval()
+        correct = 0
+        total = 0
 
-    def update_state_training(self):
-        # Check for accuracy improvement
-        if self.val_acc_list[-1] > self.best_val_acc:
-            self.save_weights()
-            self.plateau_count = 0
-            self.best_val_acc = self.val_acc_list[-1]
-            self.best_val_loss = self.val_loss_list[-1]
-            self.best_train_acc = self.train_acc_list[-1]
-            self.best_train_loss = self.train_loss_list[-1]
-            print(f"Weight updated due to improved validation accuracy: {self.best_val_acc:.4f}")
-        else:
-            self.plateau_count += 1
+        with torch.no_grad():
+            for images, labels in tqdm.tqdm(
+                    self.test_loader, total=len(self.test_loader), desc="Testing"):
+                images, labels = images.to(self.device), labels.to(self.device)
 
-        # Log CSV
-        self.update_output_csv(
-            epoch=self.current_epoch_num,
-            lr=self.optimizer.param_groups[0]['lr'],
-            accuracy=self.train_acc_list[-1],
-            loss=self.train_loss_list[-1],
-            val_accuracy=self.val_acc_list[-1],
-            val_loss=self.val_loss_list[-1]
-        )
+                outputs = self.model(images)
+                _, predicted = outputs.max(1)
+                total += labels.size(0)
+                correct += predicted.eq(labels).sum().item()
 
-        # Update learning rate scheduler
-        if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-            self.scheduler.step(self.val_acc_list[-1])
-        else:
-            self.scheduler.step()
+        accuracy = 100.0 * correct / total
 
-        # Ensure LR doesn't fall below min_lr
-        if self.optimizer.param_groups[0]['lr'] < self.min_lr:
-            self.optimizer.param_groups[0]['lr'] = self.min_lr
+        # Log to WandB
+        if self.wb:
+            wandb.log({"Test Accuracy": accuracy})
 
-    def update_epoch_num(self):
-        self.current_epoch_num += 1
+        print(f"Test Accuracy: {accuracy:.2f}%")
+        return accuracy
 
-    def stop_train(self):
-        return (
-            self.plateau_count > self.max_plateau_count or
-            self.current_epoch_num > self.max_epochs
-        )
+    def train(self):
+        """Main training loop."""
+        for epoch in range(1, self.max_epochs + 1):
+            print(f"\nEpoch {epoch}/{self.max_epochs}")
+            train_loss, train_acc = self.train_one_epoch(epoch)
+            val_loss, val_acc = self.validate_one_epoch(epoch)
 
-    def fit(self):
-        print("Training started...\n")
-        for epoch in range(self.max_epochs):
-            self.update_epoch_num()
-            print(f"Epoch {self.current_epoch_num}/{self.max_epochs}:")
+            # Scheduler step
+            if isinstance(self.scheduler, ReduceLROnPlateau):
+                self.scheduler.step(val_loss)
+            elif self.scheduler is not None:
+                self.scheduler.step()
 
-            self.train_one_epoch()
-            val_loss, val_acc = self.validate_one_epoch()
-            self.update_state_training()
+            # Save the best model
+            if val_acc > self.best_val_acc:
+                self.best_val_acc = val_acc
+                torch.save(self.model.state_dict(), self.checkpoint_path)
+                print(f"New best model saved with accuracy: {val_acc:.2f}%")
 
-            # Check stopping condition
-            if self.stop_train():
-                print("Early stopping triggered.")
-                break
-
-        print(f"Training completed. Best validation accuracy: {self.best_val_acc:.4f}")
+        print(f"Training complete. Best validation accuracy: {self.best_val_acc:.2f}%")
