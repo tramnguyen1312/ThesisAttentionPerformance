@@ -1,7 +1,7 @@
-from .ResNet import ResNet50
+from .ResNet import ResNet18
 from .VGG import VGG16
 
 __all__ = [
-    "ResNet50",
+    "ResNet18",
     "VGG16",
 ]

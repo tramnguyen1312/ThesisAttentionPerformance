@@ -1,7 +1,7 @@
 import argparse
 import torch
 from trainer import DatasetTrainer
-from backbone import ResNet50, VGG16
+from backbone import ResNet18, VGG16
 from attention import CBAMBlock, BAMBlock, scSEBlock
 from datasets import GeneralDataset
 from torch.utils.data import DataLoader
@@ -21,7 +21,7 @@ def parse_arguments():
     parser.add_argument("--image_size", type=int, default=224,
                         help="Image size for resizing (default: 224)")
     parser.add_argument("--backbone", type=str, default="VGG16",
-                        choices=["VGG16", "ResNet50"],
+                        choices=["VGG16", "ResNet18"],
                         help="Choose the backbone model (default: VGG16)")
     parser.add_argument("--attention", type=str, default="CBAM",
                         choices=["CBAM", "BAM", "scSE", "none"],
@@ -102,7 +102,7 @@ def main():
         shuffle=False,
         num_workers=args.num_workers
     )
-
+    attention_module = None
     # Select attention mechanism  
     if args.attention == "CBAM":
         attention_module = CBAMBlock(channel=3, reduction=16, kernel_size=7)
@@ -113,11 +113,12 @@ def main():
     elif args.attention == "none":
         attention_module = None
 
-        # Select backbone model
+     # Select backbone model
+    model = None
     if args.backbone == "VGG16":
         model = VGG16(pretrained=False, attention=attention_module, num_classes=train_dataset.num_classes)
-    elif args.backbone == "ResNet50":
-        model = ResNet50(pretrained=False, attention=attention_module, num_classes=train_dataset.num_classes)
+    elif args.backbone == "ResNet18":
+        model = ResNet18(pretrained=False, attention=attention_module, num_classes=train_dataset.num_classes)
 
         # Training configurations
     configs = {
@@ -134,12 +135,14 @@ def main():
         "project_name": args.wandb_project,
         "run_name": args.wandb_run,
     }
+    if model is not None:
+        # Initialize trainer
+        trainer = DatasetTrainer(model, train_loader, test_loader, test_loader, configs, wb=True)
 
-    # Initialize trainer  
-    trainer = DatasetTrainer(model, train_loader, test_loader, test_loader, configs, wb=True)
-
-    # Start training  
-    trainer.train()
+        # Start training
+        trainer.train()
+    else:
+        raise "Model is none"
 
 
 if __name__ == "__main__":

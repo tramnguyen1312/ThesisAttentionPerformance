@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 
-class ResNet50(torch.nn.Module):
+class ResNet18(torch.nn.Module):
     def __init__(self, pretrained=False, attention=None, num_classes=10):
         """
         ResNet50 model with optional attention mechanism at the initial convolution block.
@@ -14,10 +14,10 @@ class ResNet50(torch.nn.Module):
                 initial block. If None, no attention module is applied.
         """
         super().__init__()
-        self.resnet = ptcv_get_model("resnet50", pretrained=pretrained)  # Load ResNet50 backbone
+        self.resnet = ptcv_get_model("resnet18", pretrained=pretrained)  # Load ResNet50 backbone
         # Remove Max-Pooling from the initial stage
         self.resnet.features.init_block.pool = nn.Identity()  # Remove MaxPool2d
-
+        # #
         # Modify stride in res2 and res3 stages to retain more spatial information
         self.resnet.features.init_block.conv = nn.Conv2d(
             in_channels=3,
@@ -36,15 +36,13 @@ class ResNet50(torch.nn.Module):
             self.attention_module = None  # No attention by default
 
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
-        # Redefine Fully Connected layers
         self.resnet.output = nn.Sequential(
             nn.Flatten(),  # Flatten tensor
-            nn.Linear(2048, 512),  # 2048 is the output channels of ResNet50
+            nn.Linear(512, 512),  # ResNet18 outputs 512 channels
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),  # Optional dropout
             nn.Linear(512, num_classes)  # Final classification layer
         )
-
 
     def _replace_init_block_with_attention(self):
         """
@@ -79,13 +77,13 @@ if __name__ == '__main__':
 
     # Initialize models with different attention mechanisms
     cbam_module = CBAMBlock(channel=3, reduction=16, kernel_size=7)
-    model_cbam = ResNet50(pretrained=False, attention=cbam_module)
+    model_cbam = ResNet18(pretrained=False, attention=cbam_module)
 
     bam_module = BAMBlock(channel=3, reduction=16, dia_val=2)
-    model_bam = ResNet50(pretrained=False, attention=bam_module)
+    model_bam = ResNet18(pretrained=False, attention=bam_module)
 
     scse_module = scSEBlock(channel=3)
-    model_scse = ResNet50(pretrained=False, attention=scse_module)
+    model_scse = ResNet18(pretrained=False, attention=scse_module)
 
     # Test input tensor
     x = torch.randn(10, 3, 96, 96)
@@ -101,6 +99,6 @@ if __name__ == '__main__':
     print("scSE Output Shape:", outputs_scse.shape)
 
     # Test model without attention
-    model_no_attention = ResNet50(pretrained=False)
+    model_no_attention = ResNet18(pretrained=False)
     outputs_no_attention = model_no_attention(x)
     print("No Attention Output Shape:", outputs_no_attention.shape)
