@@ -70,15 +70,14 @@ class GeneralDataset:
                 transforms.RandomRotation(degrees=(-25, 25)),  # Random rotation within [-25, 25] degrees
                 transforms.RandomResizedCrop(self.image_size, scale=(0.95, 1.0)),  # Zoom: crop and scale to a minimum of 95% size
                 transforms.ToTensor(),  # Convert image to tensor
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                # Normalize as per ImageNet standards
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # Normalize as per ImageNet standards
             ])
         else:
             # Transform cho test: chỉ resize và normalize
             self.transform = transforms.Compose([
-                transforms.Resize((self.image_size, self.image_size)),  # Resize ảnh về kích thước cố định
-                transforms.ToTensor(),  # Chuyển ảnh từ PIL -> Tensor
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Chuẩn hoá
+                transforms.Resize((self.image_size, self.image_size)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ])
 
         # Load entire dataset
