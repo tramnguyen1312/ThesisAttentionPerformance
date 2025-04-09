@@ -18,15 +18,15 @@ class ResNet18(torch.nn.Module):
         # Remove Max-Pooling from the initial stage
         self.resnet.features.init_block.pool = nn.Identity()  # Remove MaxPool2d
         # #
-        # Modify stride in res2 and res3 stages to retain more spatial information
-        self.resnet.features.init_block.conv = nn.Conv2d(
-            in_channels=3,
-            out_channels=64,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=False,
-        )
+        # # Modify stride in res2 and res3 stages to retain more spatial information
+        # self.resnet.features.init_block.conv = nn.Conv2d(
+        #     in_channels=3,
+        #     out_channels=64,
+        #     kernel_size=3,
+        #     stride=1,
+        #     padding=1,
+        #     bias=False,
+        # )
 
         # Check if attention module is provided
         if isinstance(attention, nn.Module):
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     model_scse = ResNet18(pretrained=False, attention=scse_module)
 
     # Test input tensor
-    x = torch.randn(10, 3, 96, 96)
+    x = torch.randn(32, 3, 128, 128)
 
     # Test models
     outputs_cbam = model_cbam(x)

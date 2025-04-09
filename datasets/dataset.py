@@ -10,6 +10,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+def denormalize(image_tensor, mean, std):
+    """
+    Đảo ngược Normalize để chuyển ảnh về dải giá trị ban đầu ([0, 1] hoặc [0, 255]).
+    :param image_tensor: Ảnh dạng tensor (C, H, W).
+    :param mean: Danh sách giá trị mean sử dụng trong Normalize.
+    :param std: Danh sách giá trị std sử dụng trong Normalize.
+    :return: Ảnh dạng numpy array (H, W, C) dùng để plot.
+    """
+    image_tensor = image_tensor.clone()  # Tạo bản sao để tránh ảnh hưởng tensor gốc
+    for t, m, s in zip(image_tensor, mean, std):  # Áp dụng đảo ngược Normalize cho từng kênh
+        t.mul_(s).add_(m)  # t = t * std + mean
+    image_array = image_tensor.detach().numpy()  # Chuyển tensor thành numpy
+    image_array = np.transpose(image_array, (1, 2, 0))  # Chuyển trục từ (C, H, W) -> (H, W, C)
+    image_array = np.clip(image_array, 0, 1)  # Giới hạn giá trị trong [0, 1] để hiển thị ảnh
+    return image_array
+
+
 class GeneralDataset:
     """
     General dataset class wrapper using torchvision.datasets.
@@ -24,13 +41,36 @@ class GeneralDataset:
         self.test_split = test_split  # Tỷ lệ dành cho tập test
         self.random_seed = random_seed
 
+        # # Define transforms
+        # self.transform = transforms.Compose([
+        #     # transforms.Resize((self.image_size, self.image_size)),  # Resize ảnh về 224x224
+        #     transforms.RandomRotation(degrees=15),
+        #     transforms.ToTensor(),
+        #     transforms.RandomResizedCrop(size=(self.image_size, self.image_size), scale=(0.8, 1.0)),
+        #     transforms.Normalize(mean=[0.485, 0.456, 0.406],
+        #                          std=[0.229, 0.224, 0.225])
+        # ])
         # Define transforms
-        self.transform = transforms.Compose([
-            transforms.Resize((self.image_size, self.image_size)),  # Resize ảnh về 224x224
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-        ])
+        if self.data_type == "train":
+            # Transform cho train: gồm augmentations
+            self.transform = transforms.Compose([
+                transforms.Resize(size=(self.image_size, self.image_size)),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.8, 1.0)),
+                transforms.Pad(padding=30, fill=0),
+                transforms.RandomCrop(size=(self.image_size, self.image_size)),
+                transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
+                transforms.GaussianBlur(kernel_size=(5, 5), sigma=(0.1, 2)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+        else:
+            # Transform cho test: chỉ resize và normalize
+            self.transform = transforms.Compose([
+                transforms.Resize((self.image_size, self.image_size)),  # Resize ảnh về kích thước cố định
+                transforms.ToTensor(),  # Chuyển ảnh từ PIL -> Tensor
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Chuẩn hoá
+            ])
 
         # Load entire dataset
         self.full_dataset = self._load_dataset()
@@ -44,9 +84,10 @@ class GeneralDataset:
         return len(self.indices)
 
     def __getitem__(self, idx):
-        actual_idx = self.indices[idx]
+
+        #actual_idx = self.indices[idx]
         # Load ảnh và nhãn
-        image, label = self.full_dataset[actual_idx]
+        image, label = self.full_dataset[idx]
         # Nếu ảnh không phải RGB, bỏ qua (có thể xuất hiện ảnh grayscale)
         if image.mode != "RGB":
             raise ValueError("Encountered a non-RGB image, which is unsupported.")
@@ -97,33 +138,90 @@ class GeneralDataset:
         unique_labels = set(all_labels)  # Lấy danh sách các nhãn duy nhất
         return len(unique_labels)  # Tổng số lớp
 
+    def print_indices(self):
+        """
+        In toàn bộ chỉ số của dataset (train hoặc test).
+        """
+        print(f"Dataset type: {self.data_type}")
+        print(f"Total indices: {len(self.indices)}")
+        print("Indices:", self.indices)
+
     def plot_random_images(self, num_images=5):
         """
-        Plot random images from the dataset.
-        :param num_images: Number of random images to display. Default: 5
+        Hiển thị các ảnh ngẫu nhiên từ tập train/test.
+        :param num_images: Số lượng ảnh cần hiển thị. Mặc định là 5.
         """
-        random_indices = random.sample(self.indices, num_images)  # Chọn ngẫu nhiên ảnh từ indices
-        plt.figure(figsize=(15, 5))  # Kích thước của grid hiển thị
+        num_total_images = len(self.indices)
+        if num_total_images < num_images:
+            print(f"Warning: Dataset only contains {num_total_images} images. Showing all.")
+            num_images = num_total_images
+
+            # Lấy các chỉ số ngẫu nhiên trong khoảng [0, len(self.indices)]
+        random_indices = random.sample(range(num_total_images), num_images)
+
+        # # Chọn ngẫu nhiên các chỉ mục ảnh cần hiển thị
+        # random_indices = random.sample(self.indices, num_images)
+
+        # Thiết lập grid để hiển thị với matplotlib
+        fig, axes = plt.subplots(1, num_images, figsize=(15, 5))  # Grid hiển thị
+        mean = [0.485, 0.456, 0.406]  # Giá trị mean của Normalize
+        std = [0.229, 0.224, 0.225]  # Giá trị std của Normalize
+
         for i, idx in enumerate(random_indices):
-            image, label = self.full_dataset[idx]  # Lấy ảnh và nhãn gốc (chưa transform)
+            print(idx)
+            # Lấy ảnh và nhãn từ dataset
+            actual_idx = self.indices[idx]  # Chỉ mục thực tế trong `self.full_dataset`
+            image, label = self[actual_idx]
 
-            # Khi sử dụng transform, cần đảo ngược Normalize để hiển thị ảnh
-            if self.transform:
-                transform_reverse = transforms.Compose([
-                    transforms.Resize((self.image_size, self.image_size)),
-                    transforms.ToTensor()
-                ])
-                image = np.array(image)  # Chuyển dữ liệu sang numpy để plot
-            else:
-                image = np.array(image)
+            # Đảo ngược Normalize (denormalize) để hiển thị ảnh
+            denormalized_image = denormalize(image, mean, std)
+            # Hiển thị ảnh
+            ax = axes[i]
+            ax.imshow(denormalized_image)
+            ax.set_title(f"Label: {label}")
+            ax.axis("off")
 
-                # Plot ảnh
-            plt.subplot(1, num_images, i + 1)
-            plt.imshow(image)  # Hiển thị ảnh
-            plt.title(f"Label: {label}")
-            plt.axis("off")
-
+        plt.tight_layout()  # Sắp xếp các ảnh trong grid
         plt.show()
+
+
+def plot_random_images(dataset, num_images=5):
+    """
+    Hiển thị các ảnh ngẫu nhiên từ dataset.
+    :param dataset: Đối tượng dataset, kiểu GeneralDataset.
+    :param num_images: Số lượng ảnh cần hiển thị.
+    """
+    # Kiểm tra nếu số lượng ảnh trong tập dữ liệu nhỏ hơn `num_images`
+    if num_images > len(dataset.indices):
+        print(
+            f"Warning: Requested {num_images} images, but dataset only has {len(dataset.indices)}. Adjusting to {len(dataset.indices)}.")
+        num_images = len(dataset.indices)
+
+    # Chọn ngẫu nhiên các chỉ mục ảnh từ tập
+    random_indices = random.sample(dataset.indices, num_images)
+
+    # Thiết lập grid matplotlib
+    fig, axes = plt.subplots(1, num_images, figsize=(15, 5))
+
+    # Giá trị mean và std từ Normalize
+    mean = [0.485, 0.456, 0.406]
+    std = [0.229, 0.224, 0.225]
+
+    for i, idx in enumerate(random_indices):
+        # Lấy ảnh và nhãn qua __getitem__ của dataset
+        image, label = dataset[idx]
+
+        # Đảo ngược Normalize để hiển thị
+        denormalized_image = denormalize(image, mean, std)
+
+        # Hiển thị ảnh
+        ax = axes[i]
+        ax.imshow(denormalized_image)
+        ax.set_title(f"Label: {label}")
+        ax.axis("off")
+
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -145,18 +243,18 @@ if __name__ == '__main__':
     # Tạo DataLoader cho Caltech101
     train_loader = DataLoader(
         caltech101_train,
-        batch_size=32,  # Batch size
+        batch_size=32,
         shuffle=True,  # Shuffle dataset
         num_workers=0  # Để tránh lỗi đa luồng
     )
     train_loader = DataLoader(
         caltech101_test,
-        batch_size=32,  # Batch size
-        shuffle=True,  # Shuffle dataset
-        num_workers=0  # Để tránh lỗi đa luồng
+        batch_size=32,
+        shuffle=True,
+        num_workers=0
     )
-
-    caltech101_train.plot_random_images(num_images=5)
+    #caltech101_test.print_indices()
+    caltech101_train.plot_random_images(num_images=3)
 
     # Load một batch dữ liệu
     for batch_idx, (images, labels) in enumerate(train_loader):

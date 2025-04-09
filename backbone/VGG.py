@@ -21,13 +21,13 @@ class VGG16(torch.nn.Module):
 
         # Redefine Fully Connected layers for flexible input
         self.vgg16.output = nn.Sequential(
-            nn.Linear(512, 4096),  # 512 là số kênh đầu ra từ feature extractor VGG16
+            nn.Linear(512, 2048),  # 512 là số kênh đầu ra từ feature extractor VGG16
             nn.ReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(4096, 4096),
+            nn.Linear(2048, 2048),
             nn.ReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(4096, num_classes),
+            nn.Linear(2048, num_classes),
         )
         # Handle attention
         if isinstance(attention, nn.Module):
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     model_no_attention = VGG16(pretrained=False)
 
     # Input tensor
-    x = torch.randn(10, 3, 32, 32)
+    x = torch.randn(10, 3, 128, 128)
 
     # Test models
     outputs_cbam = model_cbam(x)
