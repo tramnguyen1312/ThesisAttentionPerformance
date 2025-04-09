@@ -16,6 +16,7 @@ import wandb  # Import wandb for logging
 
 class Trainer:
     """Base trainer class."""
+
     def __init__(self):
         pass
 
@@ -72,7 +73,8 @@ class DatasetTrainer(Trainer):
         if self.optimizer_choice == "Adam":
             return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.optimizer_choice == "SGD":
-            return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.9, weight_decay=self.weight_decay)
+            return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.9,
+                                   weight_decay=self.weight_decay)
         elif self.optimizer_choice == "RAdam":
             return torch.optim.RAdam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         else:
@@ -202,11 +204,19 @@ class DatasetTrainer(Trainer):
         return accuracy
 
     def train(self):
+        train_hist = {"loss": [], "accuracy": []}
+        val_hist = {"loss": [], "accuracy": []}
         """Main training loop."""
         for epoch in range(1, self.max_epochs + 1):
             print(f"\nEpoch {epoch}/{self.max_epochs}")
             train_loss, train_acc = self.train_one_epoch(epoch)
             val_loss, val_acc = self.validate_one_epoch(epoch)
+
+            # Append training history
+            train_hist["loss"].append(train_loss)
+            train_hist["accuracy"].append(train_acc)
+            val_hist["loss"].append(val_loss)
+            val_hist["accuracy"].append(val_acc)
 
             # Scheduler step
             if isinstance(self.scheduler, ReduceLROnPlateau):
@@ -218,6 +228,27 @@ class DatasetTrainer(Trainer):
             if val_acc > self.best_val_acc:
                 self.best_val_acc = val_acc
                 torch.save(self.model.state_dict(), self.checkpoint_path)
-                print(f"New best model saved with accuracy: {val_acc:.2f}%")
+
+            print(f"New best model saved with accuracy: {val_acc:.2f}%")
+
+        # Training Summary
+        print("\nTraining Summary:")
+        print(f"Start Time: {self.start_time}")
+        print(f"End Time: {datetime.datetime.now()}")
+        print(f"Best Validation Accuracy: {self.best_val_acc:.2f}%")
+        print(
+            f"Final Training Loss: {train_hist['loss'][-1]:.4f}, Final Training Accuracy: {train_hist['accuracy'][-1]:.2f}%")
+        print(
+            f"Final Validation Loss: {val_hist['loss'][-1]:.4f}, Final Validation Accuracy: {val_hist['accuracy'][-1]:.2f}%")
+
+        # Log summary to WandB
+        if self.wb:
+            wandb.log({
+                "Best Validation Accuracy": self.best_val_acc,
+                "Final Training Loss": train_hist["loss"][-1],
+                "Final Training Accuracy": train_hist["accuracy"][-1],
+                "Final Validation Loss": val_hist["loss"][-1],
+                "Final Validation Accuracy": val_hist["accuracy"][-1],
+            })
 
         print(f"Training complete. Best validation accuracy: {self.best_val_acc:.2f}%")

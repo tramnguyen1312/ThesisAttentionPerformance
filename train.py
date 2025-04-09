@@ -136,6 +136,7 @@ def main():
         "run_name": args.wandb_run,
     }
     if model is not None:
+        print(model)
         # Initialize trainer
         trainer = DatasetTrainer(model, train_loader, test_loader, test_loader, configs, wb=True)
 
