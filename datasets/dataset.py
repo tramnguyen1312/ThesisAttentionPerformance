@@ -85,9 +85,9 @@ class GeneralDataset:
 
     def __getitem__(self, idx):
 
-        #actual_idx = self.indices[idx]
+        actual_idx = self.indices[idx]
         # Load ảnh và nhãn
-        image, label = self.full_dataset[idx]
+        image, label = self.full_dataset[actual_idx]
         # Nếu ảnh không phải RGB, bỏ qua (có thể xuất hiện ảnh grayscale)
         if image.mode != "RGB":
             raise ValueError("Encountered a non-RGB image, which is unsupported.")
