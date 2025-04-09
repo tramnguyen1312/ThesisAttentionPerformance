@@ -53,16 +53,25 @@ class GeneralDataset:
         # Define transforms
         if self.data_type == "train":
             # Transform cho train: gồm augmentations
+            # self.transform = transforms.Compose([
+            #     transforms.Resize(size=(self.image_size, self.image_size)),
+            #     transforms.RandomHorizontalFlip(p=0.5),
+            #     #transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.8, 1.0)),
+            #     transforms.Pad(padding=5, fill=0),
+            #     transforms.RandomCrop(size=(self.image_size, self.image_size)),
+            #     transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
+            #     transforms.GaussianBlur(kernel_size=(5, 5), sigma=(0.1, 2)),
+            #     transforms.ToTensor(),
+            #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            # ])
             self.transform = transforms.Compose([
-                transforms.Resize(size=(self.image_size, self.image_size)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.8, 1.0)),
-                transforms.Pad(padding=30, fill=0),
-                transforms.RandomCrop(size=(self.image_size, self.image_size)),
-                transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
-                transforms.GaussianBlur(kernel_size=(5, 5), sigma=(0.1, 2)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                transforms.Resize(size=(self.image_size, self.image_size)),  # Resize all images to 224x224
+                transforms.RandomVerticalFlip(p=0.5),  # Randomly flip images vertically with 50% probability
+                transforms.RandomRotation(degrees=(-25, 25)),  # Random rotation within [-25, 25] degrees
+                transforms.RandomResizedCrop(self.image_size, scale=(0.95, 1.0)),  # Zoom: crop and scale to a minimum of 95% size
+                transforms.ToTensor(),  # Convert image to tensor
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                # Normalize as per ImageNet standards
             ])
         else:
             # Transform cho test: chỉ resize và normalize
@@ -170,8 +179,9 @@ class GeneralDataset:
         for i, idx in enumerate(random_indices):
             print(idx)
             # Lấy ảnh và nhãn từ dataset
-            actual_idx = self.indices[idx]  # Chỉ mục thực tế trong `self.full_dataset`
-            image, label = self[actual_idx]
+
+            #actual_idx = self.indices[idx]  # Chỉ mục thực tế trong `self.full_dataset`
+            image, label = self[idx]
 
             # Đảo ngược Normalize (denormalize) để hiển thị ảnh
             denormalized_image = denormalize(image, mean, std)
@@ -209,6 +219,7 @@ def plot_random_images(dataset, num_images=5):
 
     for i, idx in enumerate(random_indices):
         # Lấy ảnh và nhãn qua __getitem__ của dataset
+
         image, label = dataset[idx]
 
         # Đảo ngược Normalize để hiển thị
@@ -254,7 +265,7 @@ if __name__ == '__main__':
         num_workers=0
     )
     #caltech101_test.print_indices()
-    caltech101_train.plot_random_images(num_images=3)
+    caltech101_train.plot_random_images(num_images=10)
 
     # Load một batch dữ liệu
     for batch_idx, (images, labels) in enumerate(train_loader):
