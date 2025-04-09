@@ -19,14 +19,14 @@ class ResNet18(torch.nn.Module):
         self.resnet.features.init_block.pool = nn.Identity()  # Remove MaxPool2d
         # #
         # # Modify stride in res2 and res3 stages to retain more spatial information
-        # self.resnet.features.init_block.conv = nn.Conv2d(
-        #     in_channels=3,
-        #     out_channels=64,
-        #     kernel_size=3,
-        #     stride=1,
-        #     padding=1,
-        #     bias=False,
-        # )
+        self.resnet.features.init_block.conv = nn.Conv2d(
+            in_channels=3,
+            out_channels=64,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
 
         # Check if attention module is provided
         if isinstance(attention, nn.Module):
