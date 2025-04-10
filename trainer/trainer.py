@@ -207,6 +207,9 @@ class DatasetTrainer(Trainer):
         train_hist = {"loss": [], "accuracy": []}
         val_hist = {"loss": [], "accuracy": []}
         """Main training loop."""
+        if self.wb:
+            wandb.log(self.configs)
+
         for epoch in range(1, self.max_epochs + 1):
             print(f"\nEpoch {epoch}/{self.max_epochs}")
             train_loss, train_acc = self.train_one_epoch(epoch)
