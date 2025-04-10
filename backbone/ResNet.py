@@ -35,10 +35,14 @@ class ResNet18(torch.nn.Module):
         else:
             self.attention_module = None  # No attention by default
 
-        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        #self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # GAP and Max Pooling
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
+
         self.resnet.output = nn.Sequential(
             nn.Flatten(),  # Flatten tensor
-            nn.Linear(512, 512),  # ResNet18 outputs 512 channels
+            nn.Linear(512*2, 512),  # ResNet18 outputs 512 channels
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),  # Optional dropout
             nn.Linear(512, num_classes)  # Final classification layer
@@ -65,7 +69,10 @@ class ResNet18(torch.nn.Module):
             torch.Tensor: Model output.
         """
         x = self.resnet.features(x)  # Pass through the feature extractor
-        x = self.global_pool(x)  # Apply global average pooling (reduce spatial dimensions to 1x1)
+        #x = self.global_pool(x)  # Apply global average pooling (reduce spatial dimensions to 1x1)
+        x_avg = self.global_avg_pool(x)  # GAP
+        x_max = self.global_max_pool(x)  # Max Pool
+        x = torch.cat((x_avg, x_max), dim=1)  # Kết hợp
         x = self.resnet.output(x)  # Pass through the redefined Fully Connected layers
         return x
 
