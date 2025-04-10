@@ -66,8 +66,8 @@ class GeneralDataset:
             # ])
             self.transform = transforms.Compose([
                 transforms.Resize(size=(self.image_size, self.image_size)),  # Resize all images to 224x224
-                #transforms.RandomHorizontalFlip(p=0.5),  # Randomly flip images vertically with 50% probability
-                #transforms.RandomRotation(degrees=(-25, 25)),  # Random rotation within [-25, 25] degrees
+                transforms.RandomHorizontalFlip(p=0.5),  # Randomly flip images vertically with 50% probability
+                transforms.RandomRotation(degrees=(-25, 25)),  # Random rotation within [-25, 25] degrees
                 #transforms.RandomResizedCrop(self.image_size, scale=(0.95, 1.0)),  # Zoom: crop and scale to a minimum of 95% size
                 #transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
                 #transforms.GaussianBlur(kernel_size=(5, 5), sigma=(0.1, 2)),
