@@ -134,6 +134,7 @@ class DatasetTrainer(Trainer):
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
 
+
         avg_loss = running_loss / len(self.train_loader)
         accuracy = 100.0 * correct / total
 
@@ -207,8 +208,10 @@ class DatasetTrainer(Trainer):
         train_hist = {"loss": [], "accuracy": []}
         val_hist = {"loss": [], "accuracy": []}
         """Main training loop."""
-        if self.wb:
-            wandb.log(self.configs)
+        # if self.wb:
+        #     wandb.log(self.configs)
+
+        print(self.configs)
 
         for epoch in range(1, self.max_epochs + 1):
             print(f"\nEpoch {epoch}/{self.max_epochs}")
