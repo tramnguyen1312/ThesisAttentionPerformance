@@ -77,6 +77,8 @@ class DatasetTrainer(Trainer):
                                    weight_decay=self.weight_decay)
         elif self.optimizer_choice == "RAdam":
             return torch.optim.RAdam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        elif self.optimizer_choice == "AdamW":
+            return torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate,betas=(0.9, 0.999), eps=1e-8, weight_decay=self.weight_decay)
         else:
             raise ValueError(f"Unsupported optimizer: {self.optimizer_choice}.")
 

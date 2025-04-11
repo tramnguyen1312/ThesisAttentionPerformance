@@ -35,7 +35,7 @@ def parse_arguments():
     parser.add_argument("--min_lr", type=float, default=1e-7, help="Minimum learning rate (default: 1e-7)")
     parser.add_argument("--weight_decay", type=float, default=0.0001, help="Weight decay (default: 0.0001)")
     parser.add_argument("--optimizer", type=str, default="RAdam",
-                        choices=["RAdam", "Adam", "SGD"], help="Optimizer to use (default: RAdam)")
+                        choices=["RAdam", "Adam", "SGD", "AdamW"], help="Optimizer to use (default: RAdam)")
     parser.add_argument("--lr_scheduler", type=str, default="ReduceLROnPlateau",
                         choices=["ReduceLROnPlateau", "StepLR", "CosineAnnealingLR", "CosineAnnealingWarmRestarts", "None"],
                         help="Learning rate scheduler to use (default: ReduceLROnPlateau)")
