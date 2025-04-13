@@ -75,7 +75,7 @@ class VGG16(torch.nn.Module):
         """
         x = self.vgg16.features(x)  # Pass through feature extractor
         # x = self.global_pool(x)  # Apply global average pooling
-        x_avg = self.global_avg_pool(x)  # GAP
+        x = self.global_avg_pool(x)  # GAP
         #x_max = self.global_max_pool(x)  # Max Pooling
         # Concatenate tensors from GAP and Max Pooling
         #x = torch.cat((x_avg, x_max), dim=1)  # Concatenate trên chiều kênh

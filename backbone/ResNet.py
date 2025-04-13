@@ -86,8 +86,8 @@ class ResNet18(torch.nn.Module):
         """
         x = self.resnet.features(x)  # Pass through the feature extractor
         # x = self.global_pool(x)  # Apply global average pooling (reduce spatial dimensions to 1x1)
-        x_avg = self.global_avg_pool(x)  # GAP
-        #x_max = self.global_max_pool(x)  # Max Pool
+        x = self.global_avg_pool(x)  # GAP
+        #x_max = self.gxobal_max_pool(x)  # Max Pool
         #x = torch.cat((x_avg, x_max), dim=1)  # Kết hợp
         x = self.resnet.output(x)  # Pass through the redefined Fully Connected layers
         return x
