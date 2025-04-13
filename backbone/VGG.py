@@ -18,11 +18,11 @@ class VGG16(torch.nn.Module):
         self.vgg16 = ptcv_get_model("vgg16", pretrained=pretrained)
         # Global Average Pooling (GAP)
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
+        #self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
 
         # Redefine Fully Connected layers for flexible input
         self.vgg16.output = nn.Sequential(
-            nn.Linear(512 * 2, 4096),  # 512 là số kênh đầu ra từ feature extractor VGG16
+            nn.Linear(512, 4096),  # 512 là số kênh đầu ra từ feature extractor VGG16
             nn.ReLU(inplace=True),
             nn.Dropout(),
             nn.Linear(4096, 4096),
@@ -33,7 +33,8 @@ class VGG16(torch.nn.Module):
         # Handle attention
         if isinstance(attention, nn.Module):
             self.attention_module = attention
-            self._replace_init_block_with_attention()
+            #self._replace_init_block_with_attention()
+            self._insert_attention_after_block4()
         else:
             self.attention_module = None  # No attention by default
 
@@ -47,6 +48,21 @@ class VGG16(torch.nn.Module):
             original_conv_block  # Follow with the original convolution
         )
 
+    def _insert_attention_after_block4(self):
+        """
+        Insert the attention mechanism after Block 4 and before Block 5.
+        """
+        # Split the features into Block 4, Attention, and Block 5+
+        block4 = self.vgg16.features[:24]  # Block 4 ends before index 24 (after 3rd conv in Block 4)
+        block5 = self.vgg16.features[24:]  # Block 5 starts from index 24
+
+        # Combine Block 4, Attention, Block 5
+        self.vgg16.features = nn.Sequential(
+            *block4,  # All layers in Block 4
+            self.attention_module,  # Insert attention module here
+            *block5  # All layers in Block 5 and beyond
+        )
+
     def forward(self, x):
         """
         Forward pass through the model.
@@ -58,11 +74,11 @@ class VGG16(torch.nn.Module):
             torch.Tensor: The model output.
         """
         x = self.vgg16.features(x)  # Pass through feature extractor
-        #x = self.global_pool(x)  # Apply global average pooling
+        # x = self.global_pool(x)  # Apply global average pooling
         x_avg = self.global_avg_pool(x)  # GAP
-        x_max = self.global_max_pool(x)  # Max Pooling
+        #x_max = self.global_max_pool(x)  # Max Pooling
         # Concatenate tensors from GAP and Max Pooling
-        x = torch.cat((x_avg, x_max), dim=1)  # Concatenate trên chiều kênh
+        #x = torch.cat((x_avg, x_max), dim=1)  # Concatenate trên chiều kênh
         x = torch.flatten(x, 1)  # Flatten to shape (batch_size, 512)
         x = self.vgg16.output(x)  # Pass through classifier
         return x
@@ -75,20 +91,20 @@ if __name__ == '__main__':
     from attention.scSE import scSEBlock
 
     # Initialize models with different attention mechanisms
-    cbam_module = CBAMBlock(channel=3, reduction=16, kernel_size=7)
+    cbam_module = CBAMBlock(channel=512, reduction=16, kernel_size=7)
     model_cbam = VGG16(pretrained=False, attention=cbam_module)
 
-    bam_module = BAMBlock(channel=3, reduction=16, dia_val=2)
+    bam_module = BAMBlock(channel=512, reduction=16, dia_val=2)
     model_bam = VGG16(pretrained=False, attention=bam_module)
 
-    scse_module = scSEBlock(channel=3)
+    scse_module = scSEBlock(channel=512)
     model_scse = VGG16(pretrained=False, attention=scse_module)
 
     # Test model without attention
     model_no_attention = VGG16(pretrained=False)
 
     # Input tensor
-    x = torch.randn(10, 3, 128, 128)
+    x = torch.randn(10, 3, 224, 224)
 
     # Test models
     outputs_cbam = model_cbam(x)

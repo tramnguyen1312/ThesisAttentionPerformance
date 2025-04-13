@@ -240,13 +240,13 @@ if __name__ == '__main__':
     # Tạo dataset
     caltech101_train = GeneralDataset(
         data_type="train",
-        dataset_name="STL10",
+        dataset_name="Caltech101",
         image_size=224,
         image_path="./datasets",
     )
     caltech101_test = GeneralDataset(
         data_type="test",
-        dataset_name="STL10",
+        dataset_name="Caltech101",
         image_size=224,
         image_path="./datasets",
     )

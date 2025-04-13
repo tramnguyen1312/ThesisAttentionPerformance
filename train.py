@@ -102,14 +102,18 @@ def main():
         shuffle=False,
         num_workers=args.num_workers
     )
+    if args.backbone == "VGG16":
+        backbone_channels = 512
+    elif args.backbone == "ResNet18":
+        backbone_channels = 256
     attention_module = None
     # Select attention mechanism  
     if args.attention == "CBAM":
-        attention_module = CBAMBlock(channel=3, reduction=16, kernel_size=7)
+        attention_module = CBAMBlock(channel=backbone_channels, reduction=16, kernel_size=7)
     elif args.attention == "BAM":
-        attention_module = BAMBlock(channel=3, reduction=16, dia_val=2)
+        attention_module = BAMBlock(channel=backbone_channels, reduction=16, dia_val=2)
     elif args.attention == "scSE":
-        attention_module = scSEBlock(channel=3)
+        attention_module = scSEBlock(channel=backbone_channels)
     elif args.attention == "none":
         attention_module = None
 

@@ -12,3 +12,4 @@ pretrainedmodels
 pytorchcv
 gdown
 wandb
+scikit-learn

@@ -16,33 +16,34 @@ class ResNet18(torch.nn.Module):
         super().__init__()
         self.resnet = ptcv_get_model("resnet18", pretrained=pretrained)  # Load ResNet50 backbone
         # Remove Max-Pooling from the initial stage
-        self.resnet.features.init_block.pool = nn.Identity()  # Remove MaxPool2d
+        #self.resnet.features.init_block.pool = nn.Identity()  # Remove MaxPool2d
         # #
         # # Modify stride in res2 and res3 stages to retain more spatial information
-        self.resnet.features.init_block.conv = nn.Conv2d(
-            in_channels=3,
-            out_channels=64,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=False,
-        )
+        # self.resnet.features.init_block.conv = nn.Conv2d(
+        #     in_channels=3,
+        #     out_channels=64,
+        #     kernel_size=3,
+        #     stride=1,
+        #     padding=1,
+        #     bias=False,
+        # )
 
         # Check if attention module is provided
         if isinstance(attention, nn.Module):
             self.attention_module = attention
-            self._replace_init_block_with_attention()
+            #self._replace_init_block_with_attention()
+            self._insert_attention_after_block4()
         else:
             self.attention_module = None  # No attention by default
 
-        #self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
         # GAP and Max Pooling
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
+        #self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
 
         self.resnet.output = nn.Sequential(
             nn.Flatten(),  # Flatten tensor
-            nn.Linear(512*2, 512),  # ResNet18 outputs 512 channels
+            nn.Linear(512, 512),  # ResNet18 outputs 512 channels
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),  # Optional dropout
             nn.Linear(512, num_classes)  # Final classification layer
@@ -58,6 +59,21 @@ class ResNet18(torch.nn.Module):
             self.attention_module,  # Insert the attention module
             original_conv_block  # Follow with the original convolution
         )
+
+    def _insert_attention_after_block4(self):
+        """
+        Inserts the attention mechanism after block 4 and before block 5.
+        """
+        # Split blocks into before, attention, and after
+        res4 = self.resnet.features[3]  #  res4
+        res5 = self.resnet.features[4]  # res5
+        # Replace block list with attention sandwiched between
+        self.resnet.features[3] = nn.Sequential(
+            res4,  # Original block 4
+            self.attention_module  # Insert attention here
+        )
+        self.resnet.features[4] = res5  # Retain block 5
+
     def forward(self, x):
         """
         Forward pass through the model.
@@ -69,10 +85,10 @@ class ResNet18(torch.nn.Module):
             torch.Tensor: Model output.
         """
         x = self.resnet.features(x)  # Pass through the feature extractor
-        #x = self.global_pool(x)  # Apply global average pooling (reduce spatial dimensions to 1x1)
+        # x = self.global_pool(x)  # Apply global average pooling (reduce spatial dimensions to 1x1)
         x_avg = self.global_avg_pool(x)  # GAP
-        x_max = self.global_max_pool(x)  # Max Pool
-        x = torch.cat((x_avg, x_max), dim=1)  # Kết hợp
+        #x_max = self.global_max_pool(x)  # Max Pool
+        #x = torch.cat((x_avg, x_max), dim=1)  # Kết hợp
         x = self.resnet.output(x)  # Pass through the redefined Fully Connected layers
         return x
 
@@ -83,17 +99,17 @@ if __name__ == '__main__':
     from attention.scSE import scSEBlock
 
     # Initialize models with different attention mechanisms
-    cbam_module = CBAMBlock(channel=3, reduction=16, kernel_size=7)
+    cbam_module = CBAMBlock(channel=256, reduction=16, kernel_size=7)
     model_cbam = ResNet18(pretrained=False, attention=cbam_module)
 
-    bam_module = BAMBlock(channel=3, reduction=16, dia_val=2)
+    bam_module = BAMBlock(channel=256, reduction=16, dia_val=2)
     model_bam = ResNet18(pretrained=False, attention=bam_module)
 
-    scse_module = scSEBlock(channel=3)
+    scse_module = scSEBlock(channel=256)
     model_scse = ResNet18(pretrained=False, attention=scse_module)
 
     # Test input tensor
-    x = torch.randn(32, 3, 128, 128)
+    x = torch.randn(32, 3, 224, 224)
 
     # Test models
     outputs_cbam = model_cbam(x)
