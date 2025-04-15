@@ -57,7 +57,7 @@ class DatasetDownloader:
         if self.dataset_name == "Caltech101":
             return "https://drive.google.com/file/d/1lmgZZ2QdDxXiXyrkNzzjvwb6GDwFplLN/view?usp=sharing"
         elif self.dataset_name == "Caltech256":
-            return "https://drive.google.com/uc?id=1hOjkjTkqfoZDra5MhOXoxPRdS1Xp9gZA/view?usp=sharing"
+            return "https://drive.google.com/file/d/1Ou7A5FmPH6vJ5l-syt7geZhnljes0KEV/view?usp=sharing"
         else:
             raise ValueError("Dataset không hợp lệ. Chỉ hỗ trợ 'Caltech101' và 'Caltech256'.")
 

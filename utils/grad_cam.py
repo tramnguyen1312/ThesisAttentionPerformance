@@ -42,26 +42,21 @@ def preprocess_image(image_path):
 
 
 def visualize_gradcam(model_path, image_path, attention=None):
-    # Load model
+
     model = load_model(model_path, attention)
 
-    # Load image và preprocess
     input_tensor = preprocess_image(image_path)
 
-    # Chọn target layer (có thể là layer cuối cùng của block 5 hoặc 4 tùy vào mô hình của bạn)
-    target_layer = model.resnet.features[4]  # Layer sau block 5
+    target_layer = model.resnet.features[4]
 
     # Tạo Grad-CAM
     cam = GradCAM(model=model, target_layers=[target_layer], use_cuda=torch.cuda.is_available())
     grayscale_cam = cam(input_tensor=input_tensor)[0]  # CAM cho ảnh đầu tiên trong batch
 
-    # Chuyển tensor ảnh đầu vào về dạng RGB để overlay với Grad-CAM
     rgb_img = input_tensor.squeeze().permute(1, 2, 0).numpy()
 
-    # Áp dụng Grad-CAM lên ảnh gốc
     visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
 
-    # Hiển thị kết quả
     plt.imshow(visualization)
     plt.axis('off')
     plt.show()
