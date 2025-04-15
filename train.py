@@ -105,7 +105,7 @@ def main():
     if args.backbone == "VGG16":
         backbone_channels = 512
     elif args.backbone == "ResNet18":
-        backbone_channels = 256
+        backbone_channels = 2048
     attention_module = None
     # Select attention mechanism  
     if args.attention == "CBAM":

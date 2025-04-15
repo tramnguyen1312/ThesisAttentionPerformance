@@ -21,7 +21,7 @@ class VGG16(torch.nn.Module):
         #self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
 
         # Redefine Fully Connected layers for flexible input
-        self.vgg16.output = nn.Sequential(
+        self.classifier = nn.Sequential(
             nn.Linear(512, 4096),  # 512 là số kênh đầu ra từ feature extractor VGG16
             nn.ReLU(inplace=True),
             nn.Dropout(),
@@ -34,7 +34,7 @@ class VGG16(torch.nn.Module):
         if isinstance(attention, nn.Module):
             self.attention_module = attention
             #self._replace_init_block_with_attention()
-            self._insert_attention_after_block4()
+            self._insert_attention_after_block5()
         else:
             self.attention_module = None  # No attention by default
 
@@ -63,6 +63,21 @@ class VGG16(torch.nn.Module):
             *block5  # All layers in Block 5 and beyond
         )
 
+    def _insert_attention_after_block5(self):
+        """
+        Insert the attention mechanism after Block 5.
+        """
+        # Block 5 index: VGG16 standard features end at index 30 after 5 blocks
+        block5 = self.vgg16.features[:30]  # The first 30 layers correspond to VGG's Block 5 (5 conv layers, pool)
+        rest = self.vgg16.features[30:]  # All layers after Block 5
+
+        # Combine Block 5, Attention, and remaining layers
+        self.vgg16.features = nn.Sequential(
+            *block5,  # All layers before adding Attention
+            self.attention_module,  # Insert attention module here
+            *rest  # All layers after Block 5
+        )
+
     def forward(self, x):
         """
         Forward pass through the model.
@@ -74,13 +89,9 @@ class VGG16(torch.nn.Module):
             torch.Tensor: The model output.
         """
         x = self.vgg16.features(x)  # Pass through feature extractor
-        # x = self.global_pool(x)  # Apply global average pooling
         x = self.global_avg_pool(x)  # GAP
-        #x_max = self.global_max_pool(x)  # Max Pooling
-        # Concatenate tensors from GAP and Max Pooling
-        #x = torch.cat((x_avg, x_max), dim=1)  # Concatenate trên chiều kênh
         x = torch.flatten(x, 1)  # Flatten to shape (batch_size, 512)
-        x = self.vgg16.output(x)  # Pass through classifier
+        x = self.classifier(x)  # Pass through classifier
         return x
 
 

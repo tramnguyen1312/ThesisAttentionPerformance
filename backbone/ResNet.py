@@ -14,7 +14,7 @@ class ResNet18(torch.nn.Module):
                 initial block. If None, no attention module is applied.
         """
         super().__init__()
-        self.resnet = ptcv_get_model("resnet18", pretrained=pretrained)  # Load ResNet50 backbone
+        self.resnet = ptcv_get_model("resnet50", pretrained=pretrained)  # Load ResNet50 backbone
         # Remove Max-Pooling from the initial stage
         #self.resnet.features.init_block.pool = nn.Identity()  # Remove MaxPool2d
         # #
@@ -32,7 +32,7 @@ class ResNet18(torch.nn.Module):
         if isinstance(attention, nn.Module):
             self.attention_module = attention
             #self._replace_init_block_with_attention()
-            self._insert_attention_after_block4()
+            self._insert_attention_after_block5()
         else:
             self.attention_module = None  # No attention by default
 
@@ -41,9 +41,9 @@ class ResNet18(torch.nn.Module):
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         #self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
 
-        self.resnet.output = nn.Sequential(
+        self.classifier = nn.Sequential(
             nn.Flatten(),  # Flatten tensor
-            nn.Linear(512, 512),  # ResNet18 outputs 512 channels
+            nn.Linear(2048, 512),  # ResNet18 outputs 512 channels
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),  # Optional dropout
             nn.Linear(512, num_classes)  # Final classification layer
@@ -65,7 +65,7 @@ class ResNet18(torch.nn.Module):
         Inserts the attention mechanism after block 4 and before block 5.
         """
         # Split blocks into before, attention, and after
-        res4 = self.resnet.features[3]  #  res4
+        res4 = self.resnet.features[3]  # res4
         res5 = self.resnet.features[4]  # res5
         # Replace block list with attention sandwiched between
         self.resnet.features[3] = nn.Sequential(
@@ -73,6 +73,18 @@ class ResNet18(torch.nn.Module):
             self.attention_module  # Insert attention here
         )
         self.resnet.features[4] = res5  # Retain block 5
+
+    def _insert_attention_after_block5(self):
+        """
+        Inserts the attention mechanism after block 5 and before the final pooling.
+        """
+        # Access the fifth block and the original output
+        res5 = self.resnet.features[4]  # Get block 5
+        # Assemble a Sequential container that includes block 5 and the attention module
+        self.resnet.features[4] = nn.Sequential(
+            res5,  # The original block 5
+            self.attention_module  # Insert attention here
+        )
 
     def forward(self, x):
         """
@@ -89,7 +101,7 @@ class ResNet18(torch.nn.Module):
         x = self.global_avg_pool(x)  # GAP
         #x_max = self.gxobal_max_pool(x)  # Max Pool
         #x = torch.cat((x_avg, x_max), dim=1)  # Kết hợp
-        x = self.resnet.output(x)  # Pass through the redefined Fully Connected layers
+        x = self.classifier(x)  # Pass through the redefined Fully Connected layers
         return x
 
 
@@ -99,13 +111,13 @@ if __name__ == '__main__':
     from attention.scSE import scSEBlock
 
     # Initialize models with different attention mechanisms
-    cbam_module = CBAMBlock(channel=256, reduction=16, kernel_size=7)
+    cbam_module = CBAMBlock(channel=2048, reduction=16, kernel_size=7)
     model_cbam = ResNet18(pretrained=False, attention=cbam_module)
 
-    bam_module = BAMBlock(channel=256, reduction=16, dia_val=2)
+    bam_module = BAMBlock(channel=2048, reduction=16, dia_val=2)
     model_bam = ResNet18(pretrained=False, attention=bam_module)
 
-    scse_module = scSEBlock(channel=256)
+    scse_module = scSEBlock(channel=2048)
     model_scse = ResNet18(pretrained=False, attention=scse_module)
 
     # Test input tensor

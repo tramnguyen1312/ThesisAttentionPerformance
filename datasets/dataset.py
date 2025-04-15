@@ -68,11 +68,12 @@ class GeneralDataset:
                 transforms.Resize(size=(self.image_size, self.image_size)),  # Resize all images to 224x224
                 transforms.RandomHorizontalFlip(p=0.5),  # Randomly flip images vertically with 50% probability
                 transforms.RandomRotation(degrees=(-25, 25)),  # Random rotation within [-25, 25] degrees
-                #transforms.RandomResizedCrop(self.image_size, scale=(0.95, 1.0)),  # Zoom: crop and scale to a minimum of 95% size
+                # transforms.RandomResizedCrop(self.image_size, scale=(0.95, 1.0)),  # Zoom: crop and scale to a minimum of 95% size
                 transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
                 transforms.GaussianBlur(kernel_size=(5, 5), sigma=(0.1, 2)),
                 transforms.ToTensor(),  # Convert image to tensor
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # Normalize as per ImageNet standards
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                # Normalize as per ImageNet standards
             ])
         else:
             # Transform cho test: chỉ resize và normalize
@@ -109,7 +110,7 @@ class GeneralDataset:
 
     def _load_dataset(self):
         ssl._create_default_https_context = ssl._create_unverified_context
-        if self.dataset_name == "Caltech101":
+        if self.dataset_name == ("Caltech101"):
             return Caltech101(root=self.image_path, download=True, transform=None)
         elif self.dataset_name == "Caltech256":
             return Caltech256(root=self.image_path, download=True, transform=None)
@@ -158,95 +159,108 @@ class GeneralDataset:
 
     def plot_random_images(self, num_images=5):
         """
-        Hiển thị các ảnh ngẫu nhiên từ tập train/test.
-        :param num_images: Số lượng ảnh cần hiển thị. Mặc định là 5.
+        Hiển thị các ảnh ngẫu nhiên từ tập train/test, mỗi dòng tối đa 5 ảnh.
+        :param num_images: Số lượng ảnh cần hiển thị.
         """
         num_total_images = len(self.indices)
         if num_total_images < num_images:
             print(f"Warning: Dataset only contains {num_total_images} images. Showing all.")
             num_images = num_total_images
 
-            # Lấy các chỉ số ngẫu nhiên trong khoảng [0, len(self.indices)]
+            # Chọn ngẫu nhiên các chỉ mục ảnh
         random_indices = random.sample(range(num_total_images), num_images)
 
-        # # Chọn ngẫu nhiên các chỉ mục ảnh cần hiển thị
-        # random_indices = random.sample(self.indices, num_images)
+        # Thiết lập số cột và số dòng trong grid
+        num_cols = 5  # Mỗi dòng tối đa 5 ảnh
+        num_rows = (num_images + num_cols - 1) // num_cols  # Tính số dòng cần thiết
 
         # Thiết lập grid để hiển thị với matplotlib
-        fig, axes = plt.subplots(1, num_images, figsize=(15, 5))  # Grid hiển thị
-        mean = [0.485, 0.456, 0.406]  # Giá trị mean của Normalize
-        std = [0.229, 0.224, 0.225]  # Giá trị std của Normalize
+        fig, axes = plt.subplots(num_rows, num_cols, figsize=(15, 3 * num_rows))
+        mean = [0.485, 0.456, 0.406]  # Mean trong Normalize
+        std = [0.229, 0.224, 0.225]  # Std trong Normalize
 
+        # Flatten `axes` để duyệt dễ dàng (nó sẽ là mảng 2D nếu `num_rows > 1`)
+        axes = axes.flatten()
+
+        # Hiển thị ảnh lên các subplot
         for i, idx in enumerate(random_indices):
-            print(idx)
             # Lấy ảnh và nhãn từ dataset
-
-            #actual_idx = self.indices[idx]  # Chỉ mục thực tế trong `self.full_dataset`
             image, label = self[idx]
 
-            # Đảo ngược Normalize (denormalize) để hiển thị ảnh
+            # Đảo ngược Normalize để hiển thị ảnh
             denormalized_image = denormalize(image, mean, std)
-            # Hiển thị ảnh
+
+            # Truyền ảnh và nhãn vào subplot
             ax = axes[i]
             ax.imshow(denormalized_image)
-            ax.set_title(f"Label: {label}")
+            #ax.set_title(f"Label: {label}")
             ax.axis("off")
 
-        plt.tight_layout()  # Sắp xếp các ảnh trong grid
+            # Ẩn các ô thừa (trường hợp số ảnh không chia hết cho số cột)
+        for j in range(num_images, len(axes)):
+            axes[j].axis("off")
+
+            # Gọn layout và hiển thị
+        plt.tight_layout()
         plt.show()
 
 
-def plot_random_images(dataset, num_images=5):
+def save_random_images(dataset, num_images=10, output_dir="./random_images"):
     """
-    Hiển thị các ảnh ngẫu nhiên từ dataset.
+    Lưu ngẫu nhiên `num_images` ảnh từ dataset với nhãn tương ứng.
     :param dataset: Đối tượng dataset, kiểu GeneralDataset.
-    :param num_images: Số lượng ảnh cần hiển thị.
+    :param num_images: Số lượng ảnh cần lưu.
+    :param output_dir: Thư mục lưu trữ ảnh.
     """
+    # Tạo thư mục lưu trữ nếu chưa tồn tại
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+
     # Kiểm tra nếu số lượng ảnh trong tập dữ liệu nhỏ hơn `num_images`
     if num_images > len(dataset.indices):
         print(
-            f"Warning: Requested {num_images} images, but dataset only has {len(dataset.indices)}. Adjusting to {len(dataset.indices)}.")
+            f"Warning: Requested {num_images} images, but dataset only has {len(dataset.indices)}. Adjusting to {len(dataset.indices)}."
+        )
         num_images = len(dataset.indices)
 
     # Chọn ngẫu nhiên các chỉ mục ảnh từ tập
-    random_indices = random.sample(dataset.indices, num_images)
-
-    # Thiết lập grid matplotlib
-    fig, axes = plt.subplots(1, num_images, figsize=(15, 5))
+    random_indices = random.sample(range(len(dataset.indices)), num_images)
 
     # Giá trị mean và std từ Normalize
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
 
-    for i, idx in enumerate(random_indices):
+    for idx in random_indices:
         # Lấy ảnh và nhãn qua __getitem__ của dataset
-
         image, label = dataset[idx]
 
-        # Đảo ngược Normalize để hiển thị
+        # Đảo ngược Normalize để lưu ảnh gốc
         denormalized_image = denormalize(image, mean, std)
 
-        # Hiển thị ảnh
-        ax = axes[i]
-        ax.imshow(denormalized_image)
-        ax.set_title(f"Label: {label}")
-        ax.axis("off")
+        # Chuyển ảnh về dải giá trị từ [0, 1] -> [0, 255] và kiểu uint8
+        denormalized_image = (denormalized_image * 255).astype(np.uint8)
 
-    plt.tight_layout()
-    plt.show()
+        # Tạo tên file
+        filename = os.path.join(output_dir, f"label_{label}_idx_{idx}.jpg")
+
+        # Lưu ảnh
+        plt.imsave(filename, denormalized_image)
+        print(f"Saved: {filename}")
+
+    print(f"Saved {num_images} random images to {output_dir}")
 
 
 if __name__ == '__main__':
     # Tạo dataset
     caltech101_train = GeneralDataset(
         data_type="train",
-        dataset_name="Caltech101",
+        dataset_name="Oxford-IIIT Pets",
         image_size=224,
         image_path="./datasets",
     )
     caltech101_test = GeneralDataset(
         data_type="test",
-        dataset_name="Caltech101",
+        dataset_name="Oxford-IIIT Pets",
         image_size=224,
         image_path="./datasets",
     )
@@ -265,10 +279,11 @@ if __name__ == '__main__':
         shuffle=True,
         num_workers=0
     )
-    #caltech101_test.print_indices()
-    caltech101_train.plot_random_images(num_images=10)
+    # caltech101_test.print_indices()
+    caltech101_test.plot_random_images(num_images=20)
 
     # Load một batch dữ liệu
     for batch_idx, (images, labels) in enumerate(train_loader):
         print(f"Batch {batch_idx}: Images shape: {images.shape}, Labels shape: {labels.shape}")
         break
+    # save_random_images(caltech101_test, num_images=10, output_dir="./images")
