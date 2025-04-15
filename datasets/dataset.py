@@ -27,6 +27,69 @@ def denormalize(image_tensor, mean, std):
     return image_array
 
 
+import gdown
+import os
+import zipfile
+import ssl
+
+
+class DatasetDownloader:
+    def __init__(self, dataset_name, output_dir="./datasets"):
+        """
+        Tải dữ liệu Caltech101 hoặc Caltech256 từ Google Drive nếu chưa có sẵn.
+        :param dataset_name: Tên dataset, có thể là 'Caltech101' hoặc 'Caltech256'.
+        :param output_dir: Thư mục lưu trữ dữ liệu.
+        """
+        self.dataset_name = dataset_name
+        self.output_dir = output_dir
+        self.url = self.get_download_url()
+
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+
+        self.dataset_path = os.path.join(self.output_dir, f"{self.dataset_name}.zip")
+
+    def get_download_url(self):
+        """
+        Trả về URL tải xuống từ Google Drive cho dataset.
+        :return: URL tải xuống của dataset.
+        """
+        if self.dataset_name == "Caltech101":
+            return "https://drive.google.com/uc?id=1A4cU5W9G9fEERF6cq90R7cPb9b6h_RsD"
+        elif self.dataset_name == "Caltech256":
+            return "https://drive.google.com/uc?id=1hOjkjTkqfoZDra5MhOXoxPRdS1Xp9gZA"
+        else:
+            raise ValueError("Dataset không hợp lệ. Chỉ hỗ trợ 'Caltech101' và 'Caltech256'.")
+
+    def download(self):
+        """
+        Tải dataset từ Google Drive về.
+        """
+        if not os.path.exists(self.dataset_path):
+            print(f"Downloading {self.dataset_name} dataset...")
+            gdown.download(self.url, self.dataset_path, quiet=False)
+        else:
+            print(f"{self.dataset_name} dataset already exists.")
+
+    def extract(self):
+        """
+        Giải nén file ZIP sau khi tải xong.
+        """
+        if self.dataset_path.endswith(".zip"):
+            print(f"Extracting {self.dataset_name} dataset...")
+            with zipfile.ZipFile(self.dataset_path, 'r') as zip_ref:
+                zip_ref.extractall(self.output_dir)
+        else:
+            print(f"File {self.dataset_name}.zip không tồn tại hoặc không hợp lệ.")
+
+    def download_and_extract(self):
+        """
+        Tải về và giải nén dataset nếu chưa có sẵn.
+        """
+        self.download()
+        self.extract()
+        print(f"{self.dataset_name} dataset has been downloaded and extracted to {self.output_dir}")
+
 class GeneralDataset:
     """
     General dataset class wrapper using torchvision.datasets.
@@ -41,47 +104,27 @@ class GeneralDataset:
         self.test_split = test_split  # Tỷ lệ dành cho tập test
         self.random_seed = random_seed
 
+        if self.dataset_name in ["Caltech101", "Caltech256"]:
+            self.downloader = DatasetDownloader(dataset_name=self.dataset_name, output_dir=self.image_path)
+            self.downloader.download_and_extract()
+
         # # Define transforms
-        # self.transform = transforms.Compose([
-        #     # transforms.Resize((self.image_size, self.image_size)),  # Resize ảnh về 224x224
-        #     transforms.RandomRotation(degrees=15),
-        #     transforms.ToTensor(),
-        #     transforms.RandomResizedCrop(size=(self.image_size, self.image_size), scale=(0.8, 1.0)),
-        #     transforms.Normalize(mean=[0.485, 0.456, 0.406],
-        #                          std=[0.229, 0.224, 0.225])
-        # ])
-        # Define transforms
+
+        common_transform = transforms.Compose([
+            transforms.Resize((self.image_size, self.image_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
         if self.data_type == "train":
-            # Transform cho train: gồm augmentations
-            # self.transform = transforms.Compose([
-            #     transforms.Resize(size=(self.image_size, self.image_size)),
-            #     transforms.RandomHorizontalFlip(p=0.5),
-            #     #transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.8, 1.0)),
-            #     transforms.Pad(padding=5, fill=0),
-            #     transforms.RandomCrop(size=(self.image_size, self.image_size)),
-            #     transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
-            #     transforms.GaussianBlur(kernel_size=(5, 5), sigma=(0.1, 2)),
-            #     transforms.ToTensor(),
-            #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            # ])
             self.transform = transforms.Compose([
-                transforms.Resize(size=(self.image_size, self.image_size)),  # Resize all images to 224x224
-                transforms.RandomHorizontalFlip(p=0.5),  # Randomly flip images vertically with 50% probability
-                transforms.RandomRotation(degrees=(-25, 25)),  # Random rotation within [-25, 25] degrees
-                # transforms.RandomResizedCrop(self.image_size, scale=(0.95, 1.0)),  # Zoom: crop and scale to a minimum of 95% size
+                common_transform,
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomRotation(degrees=(-25, 25)),
                 transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
                 transforms.GaussianBlur(kernel_size=(5, 5), sigma=(0.1, 2)),
-                transforms.ToTensor(),  # Convert image to tensor
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                # Normalize as per ImageNet standards
             ])
         else:
-            # Transform cho test: chỉ resize và normalize
-            self.transform = transforms.Compose([
-                transforms.Resize((self.image_size, self.image_size)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ])
+            self.transform = common_transform
 
         # Load entire dataset
         self.full_dataset = self._load_dataset()
@@ -110,10 +153,13 @@ class GeneralDataset:
 
     def _load_dataset(self):
         ssl._create_default_https_context = ssl._create_unverified_context
-        if self.dataset_name == ("Caltech101"):
-            return Caltech101(root=self.image_path, download=True, transform=None)
+        if self.dataset_name == "Caltech101":
+            dataset_dir = os.path.join(self.image_path, "caltech101")
+            return self._load_custom_dataset(dataset_dir)
+
         elif self.dataset_name == "Caltech256":
-            return Caltech256(root=self.image_path, download=True, transform=None)
+            dataset_dir = os.path.join(self.image_path, "caltech256")
+            return self._load_custom_dataset(dataset_dir)
         elif self.dataset_name == "STL10":
             split = "unlabeled" if self.data_type == "unlabeled" else self.data_type
             return STL10(root=self.image_path, split=split, download=True, transform=None)
@@ -122,6 +168,17 @@ class GeneralDataset:
         else:
             raise ValueError(f"Dataset {self.dataset_name} is not supported!")
 
+    def _load_custom_dataset(self, dataset_dir):
+        """
+        Hàm tùy chỉnh để tải dataset Caltech101 hoặc Caltech256 từ thư mục giải nén.
+        """
+        from torchvision import datasets
+        from torchvision.transforms import ToTensor
+
+        # Kiểm tra nếu thư mục dataset đã tồn tại
+        if not os.path.exists(dataset_dir):
+            raise ValueError(f"Dataset directory {dataset_dir} không tồn tại!")
+        return datasets.ImageFolder(root=dataset_dir, transform=ToTensor())
     def _split_dataset(self):
         # Lọc các chỉ số của ảnh RGB từ toàn bộ dataset
         all_indices = [
@@ -254,13 +311,13 @@ if __name__ == '__main__':
     # Tạo dataset
     caltech101_train = GeneralDataset(
         data_type="train",
-        dataset_name="Oxford-IIIT Pets",
+        dataset_name="Caltech101",
         image_size=224,
         image_path="./datasets",
     )
     caltech101_test = GeneralDataset(
         data_type="test",
-        dataset_name="Oxford-IIIT Pets",
+        dataset_name="Caltech101",
         image_size=224,
         image_path="./datasets",
     )
@@ -287,3 +344,4 @@ if __name__ == '__main__':
         print(f"Batch {batch_idx}: Images shape: {images.shape}, Labels shape: {labels.shape}")
         break
     # save_random_images(caltech101_test, num_images=10, output_dir="./images")
+

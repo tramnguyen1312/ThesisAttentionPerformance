@@ -12,7 +12,7 @@ from torch.optim.lr_scheduler import (
 import tqdm
 from torch.utils.data import DataLoader
 import wandb  # Import wandb for logging
-
+import csv
 
 class Trainer:
     """Base trainer class."""
@@ -63,10 +63,27 @@ class DatasetTrainer(Trainer):
         # Checkpoint and Logging
         self.start_time = datetime.datetime.now()
         self.checkpoint_path = configs.get("checkpoint_path", "best_model.pth")
+        self.early_stopping_patience = configs.get("early_stopping_patience", 10)
+        self.early_stopping_counter = 0
+        self.csv_log_path = configs.get("csv_log_path", "training_log.csv")
+        self._initialize_csv_log()
 
         # WandB setup
         if self.wb:
             self._initialize_wandb()
+
+    def _initialize_csv_log(self):
+        # Open CSV log file and write header
+        with open(self.csv_log_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([
+                "epoch",
+                "train_loss",
+                "train_accuracy",
+                "val_loss",
+                "val_accuracy",
+                "learning_rate"
+            ])
 
     def _initialize_optimizer(self):
         """Set up the optimizer."""
@@ -210,11 +227,7 @@ class DatasetTrainer(Trainer):
         train_hist = {"loss": [], "accuracy": []}
         val_hist = {"loss": [], "accuracy": []}
         """Main training loop."""
-        # if self.wb:
-        #     wandb.log(self.configs)
-
         print(self.configs)
-
         for epoch in range(1, self.max_epochs + 1):
             print(f"\nEpoch {epoch}/{self.max_epochs}")
             train_loss, train_acc = self.train_one_epoch(epoch)
@@ -231,13 +244,30 @@ class DatasetTrainer(Trainer):
                 self.scheduler.step(val_loss)
             elif self.scheduler is not None:
                 self.scheduler.step()
+            #Write log
+            current_lr = self.optimizer.param_groups[0]['lr']
+            with open(self.csv_log_path, mode='a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow([
+                    epoch,
+                    train_loss,
+                    train_acc,
+                    val_loss,
+                    val_acc,
+                    current_lr
+                ])
 
             # Save the best model
             if val_acc > self.best_val_acc:
                 self.best_val_acc = val_acc
                 torch.save(self.model.state_dict(), self.checkpoint_path)
-
-            print(f"New best model saved with accuracy: {val_acc:.2f}%")
+                print(f"New best model saved with accuracy: {val_acc:.2f}%")
+            else:
+                self.early_stopping_counter += 1
+                print(f"No improvement. Early stopping counter: {self.early_stopping_counter}/{self.early_stopping_patience}")
+                if self.early_stopping_counter >= self.early_stopping_patience:
+                    print(f"Early stopping triggered at epoch {epoch}. Best validation accuracy: {self.best_val_acc:.2f}%")
+                    break  # Exit training loop
 
         # Training Summary
         print("\nTraining Summary:")
@@ -249,14 +279,14 @@ class DatasetTrainer(Trainer):
         print(
             f"Final Validation Loss: {val_hist['loss'][-1]:.4f}, Final Validation Accuracy: {val_hist['accuracy'][-1]:.2f}%")
 
-        # Log summary to WandB
-        if self.wb:
-            wandb.log({
-                "Best Validation Accuracy": self.best_val_acc,
-                "Final Training Loss": train_hist["loss"][-1],
-                "Final Training Accuracy": train_hist["accuracy"][-1],
-                "Final Validation Loss": val_hist["loss"][-1],
-                "Final Validation Accuracy": val_hist["accuracy"][-1],
-            })
+        # # Log summary to WandB
+        # if self.wb:
+        #     wandb.log({
+        #         "Best Validation Accuracy": self.best_val_acc,
+        #         "Final Training Loss": train_hist["loss"][-1],
+        #         "Final Training Accuracy": train_hist["accuracy"][-1],
+        #         "Final Validation Loss": val_hist["loss"][-1],
+        #         "Final Validation Accuracy": val_hist["accuracy"][-1],
+        #     })
 
         print(f"Training complete. Best validation accuracy: {self.best_val_acc:.2f}%")

@@ -40,6 +40,7 @@ def parse_arguments():
                         choices=["ReduceLROnPlateau", "StepLR", "CosineAnnealingLR", "CosineAnnealingWarmRestarts", "None"],
                         help="Learning rate scheduler to use (default: ReduceLROnPlateau)")
     parser.add_argument("--max_epoch", type=int, default=10, help="Maximum number of training epochs (default: 10)")
+    parser.add_argument("--early_stopping_patience", type=int, default=5, help="Maximum number of training epochs (default: 10)")
 
     # Device and reproducibility  
     parser.add_argument("--device", type=str, default="cuda",
@@ -138,6 +139,7 @@ def main():
         "wandb_api_key": "dd87e95e7e3a44008a8048b644b23369cc39812f",
         "project_name": args.wandb_project,
         "run_name": args.wandb_run,
+        "early_stopping_patience": args.early_stopping_patience,
     }
     if model is not None:
         print(model)
