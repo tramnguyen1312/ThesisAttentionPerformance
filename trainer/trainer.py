@@ -232,7 +232,6 @@ class DatasetTrainer(Trainer):
             print(f"\nEpoch {epoch}/{self.max_epochs}")
             train_loss, train_acc = self.train_one_epoch(epoch)
             val_loss, val_acc = self.validate_one_epoch(epoch)
-
             # Append training history
             train_hist["loss"].append(train_loss)
             train_hist["accuracy"].append(train_acc)

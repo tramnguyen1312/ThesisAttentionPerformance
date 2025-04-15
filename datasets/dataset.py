@@ -55,9 +55,9 @@ class DatasetDownloader:
         :return: URL tải xuống của dataset.
         """
         if self.dataset_name == "Caltech101":
-            return "https://drive.google.com/uc?id=1A4cU5W9G9fEERF6cq90R7cPb9b6h_RsD"
+            return "https://drive.google.com/file/d/1lmgZZ2QdDxXiXyrkNzzjvwb6GDwFplLN/view?usp=sharing"
         elif self.dataset_name == "Caltech256":
-            return "https://drive.google.com/uc?id=1hOjkjTkqfoZDra5MhOXoxPRdS1Xp9gZA"
+            return "https://drive.google.com/uc?id=1hOjkjTkqfoZDra5MhOXoxPRdS1Xp9gZA/view?usp=sharing"
         else:
             raise ValueError("Dataset không hợp lệ. Chỉ hỗ trợ 'Caltech101' và 'Caltech256'.")
 
@@ -67,7 +67,7 @@ class DatasetDownloader:
         """
         if not os.path.exists(self.dataset_path):
             print(f"Downloading {self.dataset_name} dataset...")
-            gdown.download(self.url, self.dataset_path, quiet=False)
+            gdown.download(self.url, self.dataset_path, quiet=False, fuzzy=True)
         else:
             print(f"{self.dataset_name} dataset already exists.")
 
@@ -153,13 +153,10 @@ class GeneralDataset:
 
     def _load_dataset(self):
         ssl._create_default_https_context = ssl._create_unverified_context
-        if self.dataset_name == "Caltech101":
-            dataset_dir = os.path.join(self.image_path, "caltech101")
-            return self._load_custom_dataset(dataset_dir)
-
-        elif self.dataset_name == "Caltech256":
-            dataset_dir = os.path.join(self.image_path, "caltech256")
-            return self._load_custom_dataset(dataset_dir)
+        if self.dataset_name == ("Caltech101"):
+            return Caltech101(root=self.image_path, download=True, transform=None)
+        if self.dataset_name == ("Caltech256"):
+             return Caltech256(root=self.image_path, download=True, transform=None)
         elif self.dataset_name == "STL10":
             split = "unlabeled" if self.data_type == "unlabeled" else self.data_type
             return STL10(root=self.image_path, split=split, download=True, transform=None)
@@ -179,6 +176,7 @@ class GeneralDataset:
         if not os.path.exists(dataset_dir):
             raise ValueError(f"Dataset directory {dataset_dir} không tồn tại!")
         return datasets.ImageFolder(root=dataset_dir, transform=ToTensor())
+
     def _split_dataset(self):
         # Lọc các chỉ số của ảnh RGB từ toàn bộ dataset
         all_indices = [
