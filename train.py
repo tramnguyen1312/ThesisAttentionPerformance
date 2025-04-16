@@ -40,7 +40,7 @@ def parse_arguments():
                         choices=["ReduceLROnPlateau", "StepLR", "CosineAnnealingLR", "CosineAnnealingWarmRestarts", "None"],
                         help="Learning rate scheduler to use (default: ReduceLROnPlateau)")
     parser.add_argument("--max_epoch", type=int, default=10, help="Maximum number of training epochs (default: 10)")
-    parser.add_argument("--early_stopping_patience", type=int, default=5, help="Maximum number of training epochs (default: 10)")
+    parser.add_argument("--early_stopping_patience", type=int, default=10, help="Maximum number of training epochs (default: 10)")
 
     # Device and reproducibility  
     parser.add_argument("--device", type=str, default="cuda",
