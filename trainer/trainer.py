@@ -261,6 +261,7 @@ class DatasetTrainer(Trainer):
                 self.best_val_acc = val_acc
                 torch.save(self.model.state_dict(), self.checkpoint_path)
                 print(f"New best model saved with accuracy: {val_acc:.2f}%")
+                self.early_stopping_counter = 0
             else:
                 self.early_stopping_counter += 1
                 print(f"No improvement. Early stopping counter: {self.early_stopping_counter}/{self.early_stopping_patience}")
