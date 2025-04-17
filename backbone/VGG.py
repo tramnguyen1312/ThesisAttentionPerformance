@@ -24,17 +24,17 @@ class VGG16(torch.nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(512, 4096),  # 512 là số kênh đầu ra từ feature extractor VGG16
             nn.ReLU(inplace=True),
-            nn.Dropout(),
+            nn.Dropout(0.3),
             nn.Linear(4096, 4096),
             nn.ReLU(inplace=True),
-            nn.Dropout(),
+            nn.Dropout(0.3),
             nn.Linear(4096, num_classes),
         )
         # Handle attention
         if isinstance(attention, nn.Module):
             self.attention_module = attention
             #self._replace_init_block_with_attention()
-            self._insert_attention_after_block5()
+            self._insert_attention_after_block4()
         else:
             self.attention_module = None  # No attention by default
 

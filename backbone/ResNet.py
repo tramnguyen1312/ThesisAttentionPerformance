@@ -14,7 +14,7 @@ class ResNet18(torch.nn.Module):
                 initial block. If None, no attention module is applied.
         """
         super().__init__()
-        self.resnet = ptcv_get_model("resnet50", pretrained=pretrained)  # Load ResNet50 backbone
+        self.resnet = ptcv_get_model("resnet18", pretrained=pretrained)  # Load ResNet50 backbone
         # Remove Max-Pooling from the initial stage
         #self.resnet.features.init_block.pool = nn.Identity()  # Remove MaxPool2d
         # #
@@ -32,7 +32,7 @@ class ResNet18(torch.nn.Module):
         if isinstance(attention, nn.Module):
             self.attention_module = attention
             #self._replace_init_block_with_attention()
-            self._insert_attention_after_block5()
+            self._insert_attention_after_block4()
         else:
             self.attention_module = None  # No attention by default
 
@@ -43,9 +43,9 @@ class ResNet18(torch.nn.Module):
 
         self.classifier = nn.Sequential(
             nn.Flatten(),  # Flatten tensor
-            nn.Linear(2048, 512),  # ResNet18 outputs 512 channels
+            nn.Linear(512, 512),  # ResNet18 outputs 512 channels
             nn.ReLU(inplace=True),
-            nn.Dropout(0.5),  # Optional dropout
+            nn.Dropout(0.4),  # Optional dropout
             nn.Linear(512, num_classes)  # Final classification layer
         )
 
@@ -111,13 +111,13 @@ if __name__ == '__main__':
     from attention.scSE import scSEBlock
 
     # Initialize models with different attention mechanisms
-    cbam_module = CBAMBlock(channel=2048, reduction=16, kernel_size=7)
+    cbam_module = CBAMBlock(channel=256, reduction=16, kernel_size=7)
     model_cbam = ResNet18(pretrained=False, attention=cbam_module)
 
-    bam_module = BAMBlock(channel=2048, reduction=16, dia_val=2)
+    bam_module = BAMBlock(channel=256, reduction=16, dia_val=2)
     model_bam = ResNet18(pretrained=False, attention=bam_module)
 
-    scse_module = scSEBlock(channel=2048)
+    scse_module = scSEBlock(channel=256)
     model_scse = ResNet18(pretrained=False, attention=scse_module)
 
     # Test input tensor
