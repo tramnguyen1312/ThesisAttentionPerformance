@@ -42,7 +42,6 @@ class ResNet18(torch.nn.Module):
         #self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
 
         self.classifier = nn.Sequential(
-            nn.Flatten(),  # Flatten tensor
             nn.Linear(512, 512),  # ResNet18 outputs 512 channels
             nn.ReLU(inplace=True),
             nn.Dropout(0.4),  # Optional dropout
@@ -97,10 +96,8 @@ class ResNet18(torch.nn.Module):
             torch.Tensor: Model output.
         """
         x = self.resnet.features(x)  # Pass through the feature extractor
-        # x = self.global_pool(x)  # Apply global average pooling (reduce spatial dimensions to 1x1)
         x = self.global_avg_pool(x)  # GAP
-        #x_max = self.gxobal_max_pool(x)  # Max Pool
-        #x = torch.cat((x_avg, x_max), dim=1)  # Kết hợp
+        x = torch.flatten(x, 1)
         x = self.classifier(x)  # Pass through the redefined Fully Connected layers
         return x
 

@@ -110,18 +110,38 @@ class GeneralDataset:
 
         # # Define transforms
 
+        # common_transform = transforms.Compose([
+        #     transforms.Resize((self.image_size, self.image_size)),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        # ])
+        # if self.data_type == "train":
+        #     self.transform = transforms.Compose([
+        #         common_transform,
+        #         transforms.RandomHorizontalFlip(p=0.5),
+        #         transforms.RandomRotation(degrees=(-25, 25)),
+        #         transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
+        #         transforms.GaussianBlur(kernel_size=(5, 5), sigma=(0.1, 2)),
+        #     ])
+        # else:
+        #     self.transform = common_transform
         common_transform = transforms.Compose([
-            transforms.Resize((self.image_size, self.image_size)),
+            transforms.Resize((image_size + 32, image_size + 32)),
+            transforms.CenterCrop(image_size),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
+
         if self.data_type == "train":
             self.transform = transforms.Compose([
-                common_transform,
+                transforms.RandomResizedCrop(self.image_size, scale=(0.7, 1.0)),
                 transforms.RandomHorizontalFlip(p=0.5),
-                transforms.RandomRotation(degrees=(-25, 25)),
+                transforms.RandomRotation(degrees=15),
                 transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
-                transforms.GaussianBlur(kernel_size=(5, 5), sigma=(0.1, 2)),
+                transforms.RandomPerspective(distortion_scale=0.3, p=0.3),
+                transforms.GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 1.5)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
         else:
             self.transform = common_transform
@@ -335,7 +355,7 @@ if __name__ == '__main__':
         num_workers=0
     )
     # caltech101_test.print_indices()
-    caltech101_test.plot_random_images(num_images=20)
+    caltech101_train.plot_random_images(num_images=20)
 
     # Load một batch dữ liệu
     for batch_idx, (images, labels) in enumerate(train_loader):

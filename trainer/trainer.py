@@ -14,6 +14,25 @@ from torch.utils.data import DataLoader
 import wandb  # Import wandb for logging
 import csv
 
+class EarlyStopping:
+    def __init__(self, patience=7, delta=0):
+        self.patience = patience
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+        self.delta = delta
+
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif val_loss > self.best_loss - self.delta:
+            self.counter += 1
+            print(f"EarlyStopping counter: {self.counter}/{self.patience}")
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_loss = val_loss
+            self.counter = 0
 class Trainer:
     """Base trainer class."""
 
@@ -228,6 +247,9 @@ class DatasetTrainer(Trainer):
         val_hist = {"loss": [], "accuracy": []}
         """Main training loop."""
         print(self.configs)
+
+        early_stopper = EarlyStopping(patience=self.early_stopping_patience)
+
         for epoch in range(1, self.max_epochs + 1):
             print(f"\nEpoch {epoch}/{self.max_epochs}")
             train_loss, train_acc = self.train_one_epoch(epoch)
@@ -256,18 +278,15 @@ class DatasetTrainer(Trainer):
                     current_lr
                 ])
 
-            # Save the best model
+
             if val_acc > self.best_val_acc:
                 self.best_val_acc = val_acc
                 torch.save(self.model.state_dict(), self.checkpoint_path)
                 print(f"New best model saved with accuracy: {val_acc:.2f}%")
-                self.early_stopping_counter = 0
-            else:
-                self.early_stopping_counter += 1
-                print(f"No improvement. Early stopping counter: {self.early_stopping_counter}/{self.early_stopping_patience}")
-                if self.early_stopping_counter >= self.early_stopping_patience:
-                    print(f"Early stopping triggered at epoch {epoch}. Best validation accuracy: {self.best_val_acc:.2f}%")
-                    break  # Exit training loop
+            early_stopper(val_loss)
+            if early_stopper.early_stop:
+                print("Early stopping triggered!")
+                break
 
         # Training Summary
         print("\nTraining Summary:")
