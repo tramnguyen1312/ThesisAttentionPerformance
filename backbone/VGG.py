@@ -17,17 +17,19 @@ class VGG16(torch.nn.Module):
         # Load the base VGG16 model
         self.vgg16 = ptcv_get_model("vgg16", pretrained=pretrained)
         # Global Average Pooling (GAP)
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.adaptive_avg_pool = nn.AdaptiveAvgPool2d(output_size=(7, 7)) # dùng lại adaptive avgpooling
+        #self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         #self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
 
         # Redefine Fully Connected layers for flexible input
         self.classifier = nn.Sequential(
-            nn.Linear(512, 4096),  # 512 là số kênh đầu ra từ feature extractor VGG16
+            #nn.Linear(512, 4096),  # 512 là số kênh đầu ra từ feature extractor VGG16
+            nn.Linear(512 * 7 * 7,4096),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
+            nn.Dropout(0.5),
             nn.Linear(4096, 4096),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
+            nn.Dropout(0.5),
             nn.Linear(4096, num_classes),
         )
         # Handle attention
@@ -89,7 +91,7 @@ class VGG16(torch.nn.Module):
             torch.Tensor: The model output.
         """
         x = self.vgg16.features(x)  # Pass through feature extractor
-        x = self.global_avg_pool(x)  # GAP
+        x = self.adaptive_avg_pool(x)  # AAP
         x = torch.flatten(x, 1)  # Flatten to shape (batch_size, 512)
         x = self.classifier(x)  # Pass through classifier
         return x

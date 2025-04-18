@@ -148,6 +148,14 @@ class GeneralDataset:
 
         # Load entire dataset
         self.full_dataset = self._load_dataset()
+        print(self.full_dataset)
+        # Danh sách tên lớp
+        print("Tên lớp:", self.full_dataset.categories)
+        # Số lớp
+        labels = [label for _, label in  self.full_dataset]
+        num_classes = len(set(labels))
+        print("Số lớp:", num_classes)
+
 
         self.num_classes = self._get_num_classes()
 
