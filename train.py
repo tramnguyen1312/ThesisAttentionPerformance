@@ -136,7 +136,7 @@ def main():
         "lr_scheduler": args.lr_scheduler,
         "max_epoch_num": args.max_epoch,
         "checkpoint_path": args.checkpoint_path,
-        "wandb_api_key": "dd87e95e7e3a44008a8048b644b23369cc39812f",
+        "wandb_api_key": "94c506f92aea3ff024c35621dc85e7ee75194d12",
         "project_name": args.wandb_project,
         "run_name": args.wandb_run,
         "early_stopping_patience": args.early_stopping_patience,
