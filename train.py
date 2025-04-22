@@ -55,6 +55,7 @@ def parse_arguments():
                         help="WandB run name (default: run-v1)")
     parser.add_argument("--checkpoint_path", type=str, default="best_model.pth",
                         help="Path to save the best model (default: best_model.pth)")
+    parser.add_argument("--pre_train",  type=bool, default=False, help="Enable pre-training mode")
 
     return parser.parse_args()
 
@@ -121,9 +122,9 @@ def main():
      # Select backbone model
     model = None
     if args.backbone == "VGG16":
-        model = VGG16(pretrained=False, attention=attention_module, num_classes=train_dataset.num_classes)
+        model = VGG16(pretrained=args.pre_train, attention=attention_module, num_classes=train_dataset.num_classes)
     elif args.backbone == "ResNet18":
-        model = ResNet18(pretrained=False, attention=attention_module, num_classes=train_dataset.num_classes)
+        model = ResNet18(pretrained=args.pre_train, attention=attention_module, num_classes=train_dataset.num_classes)
 
         # Training configurations
     configs = {
