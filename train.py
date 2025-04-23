@@ -55,7 +55,7 @@ def parse_arguments():
                         help="WandB run name (default: run-v1)")
     parser.add_argument("--checkpoint_path", type=str, default="best_model.pth",
                         help="Path to save the best model (default: best_model.pth)")
-    parser.add_argument("--pre_train",  type=bool, default=False, help="Enable pre-training mode")
+    parser.add_argument("--pre_train", action="store_true",help="Enable pre-training mode")
 
     return parser.parse_args()
 
