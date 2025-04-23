@@ -13,6 +13,5 @@ pytorchcv
 gdown
 wandb
 scikit-learn
-grad-cam
 seaborn
 pandas
