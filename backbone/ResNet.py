@@ -2,6 +2,8 @@ from pytorchcv.model_provider import get_model as ptcv_get_model
 import torch
 import torch.nn as nn
 
+from attention.hybird.HMHA_CBAM import HMHA_CBAM
+
 
 class ResNet18(torch.nn.Module):
     def __init__(self, pretrained=False, attention=None, num_classes=10):
@@ -107,30 +109,14 @@ if __name__ == '__main__':
     from attention.BAM import BAMBlock
     from attention.scSE import scSEBlock
 
-    # Initialize models with different attention mechanisms
-    cbam_module = CBAMBlock(channel=256, reduction=16, kernel_size=7)
-    model_cbam = ResNet18(pretrained=False, attention=cbam_module)
-
-    bam_module = BAMBlock(channel=256, reduction=16, dia_val=2)
-    model_bam = ResNet18(pretrained=False, attention=bam_module)
-
-    scse_module = scSEBlock(channel=256)
-    model_scse = ResNet18(pretrained=False, attention=scse_module)
+    # Khởi tạo các mô hình hybrid
+    mha_cbam = HMHA_CBAM(channel=256, num_heads=8, reduction=16, kernel_size=7)
+    model_mha_cbam = ResNet18(pretrained=False, attention=mha_cbam)
 
     # Test input tensor
     x = torch.randn(32, 3, 224, 224)
 
     # Test models
-    outputs_cbam = model_cbam(x)
+    outputs_cbam = model_mha_cbam(x)
     print("CBAM Output Shape:", outputs_cbam.shape)
 
-    outputs_bam = model_bam(x)
-    print("BAM Output Shape:", outputs_bam.shape)
-
-    outputs_scse = model_scse(x)
-    print("scSE Output Shape:", outputs_scse.shape)
-
-    # Test model without attention
-    model_no_attention = ResNet18(pretrained=False)
-    outputs_no_attention = model_no_attention(x)
-    print("No Attention Output Shape:", outputs_no_attention.shape)

@@ -2,9 +2,10 @@ import argparse
 import torch
 from trainer import DatasetTrainer
 from backbone import ResNet18, VGG16
-from attention import CBAMBlock, BAMBlock, scSEBlock
+from attention import CBAMBlock, BAMBlock, scSEBlock, HMHA_CBAM
 from datasets import GeneralDataset
 from torch.utils.data import DataLoader
+
 
 
 def parse_arguments():
@@ -24,7 +25,7 @@ def parse_arguments():
                         choices=["VGG16", "ResNet18"],
                         help="Choose the backbone model (default: VGG16)")
     parser.add_argument("--attention", type=str, default="CBAM",
-                        choices=["CBAM", "BAM", "scSE", "none"],
+                        choices=["CBAM", "BAM", "scSE", "none", "MHA_CBAM"],
                         help="Choose an attention mechanism or none (default: CBAM)")
     parser.add_argument("--num_workers", type=int, default=0,
                         help="Number of workers for DataLoader (default: 0)")
@@ -118,6 +119,8 @@ def main():
         attention_module = scSEBlock(channel=backbone_channels)
     elif args.attention == "none":
         attention_module = None
+    elif args.attention == "MHA_CBAM":
+        attention_module = HMHA_CBAM(channel=256, num_heads=8, reduction=16, kernel_size=7)
 
      # Select backbone model
     model = None
