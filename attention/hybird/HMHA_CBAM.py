@@ -7,6 +7,8 @@ class HMHA_CBAM(nn.Module):
     def __init__(self, channel, num_heads=8, reduction=16, kernel_size=7):
         super(HMHA_CBAM, self).__init__()
 
+        print(f'channel: {channel}')
+
         # Custom MHA
         self.mha = HMHA(channel, num_heads, reduction)
 
