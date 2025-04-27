@@ -97,10 +97,32 @@ class ResNet18(torch.nn.Module):
         Returns:
             torch.Tensor: Model output.
         """
-        x = self.resnet.features(x)  # Pass through the feature extractor
-        x = self.global_avg_pool(x)  # GAP
-        x = torch.flatten(x, 1)
-        x = self.classifier(x)  # Pass through the redefined Fully Connected layers
+        # x = self.resnet.features(x)  # Pass through the feature extractor
+        # x = self.global_avg_pool(x)  # GAP
+        # x = torch.flatten(x, 1)
+        # x = self.classifier(x)  # Pass through the redefined Fully Connected layers
+        # Early feature extraction
+        x = self.resnet.features.init_block(x)  # conv1 + bn + relu + pool
+        x = self.resnet.features.stage1(x)  # layer1
+        x = self.resnet.features.stage2(x)  # layer2
+
+        # Mid-branch
+        mid_feat = self.attention_module(x)
+        mid_feat = self.global_avg_pool(mid_feat)
+        mid_feat = mid_feat.view(mid_feat.size(0), -1)
+
+        # High-branch
+        high_feat = self.resnet.features.stage3(x)  # layer3
+        high_feat = self.resnet.features.stage4(high_feat)  # layer4
+        high_feat = self.global_avg_pool(high_feat)
+        high_feat = high_feat.view(high_feat.size(0), -1)
+
+        # Feature fusion
+        fused_feat = torch.cat([mid_feat, high_feat], dim=1)  # Concatenate features
+
+        # Classification
+        x = self.classifier(fused_feat)
+        return x
         return x
 
 
@@ -110,9 +132,9 @@ if __name__ == '__main__':
     from attention.scSE import scSEBlock
 
     # Khởi tạo các mô hình hybrid
-    mha_cbam = HMHA_CBAM(channel=256, num_heads=8, reduction=16, kernel_size=7)
+    mha_cbam = HMHA_CBAM(channel=128, num_heads=8, reduction=16, kernel_size=7)
     model_mha_cbam = ResNet18(pretrained=False, attention=mha_cbam)
-
+    print(model_mha_cbam)
     # Test input tensor
     x = torch.randn(32, 3, 224, 224)
 
