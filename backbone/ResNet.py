@@ -34,7 +34,7 @@ class ResNet18(torch.nn.Module):
         if isinstance(attention, nn.Module):
             self.attention_module = attention
             #self._replace_init_block_with_attention()
-            self._insert_attention_after_block4()
+            #self._insert_attention_after_block4()
         else:
             self.attention_module = None  # No attention by default
 
@@ -44,7 +44,7 @@ class ResNet18(torch.nn.Module):
         #self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
 
         self.classifier = nn.Sequential(
-            nn.Linear(512, 512),  # ResNet18 outputs 512 channels
+            nn.Linear(512 + 128, 512),  # ResNet18 outputs 512 channels
             nn.ReLU(inplace=True),
             nn.Dropout(0.4),  # Optional dropout
             nn.Linear(512, num_classes)  # Final classification layer
@@ -122,7 +122,6 @@ class ResNet18(torch.nn.Module):
 
         # Classification
         x = self.classifier(fused_feat)
-        return x
         return x
 
 

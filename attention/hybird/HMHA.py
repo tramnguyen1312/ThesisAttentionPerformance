@@ -15,6 +15,7 @@ class HMHA(nn.Module):
         # Query, Key, Value projections cho tất cả heads
         self.qkv = nn.Conv2d(channel, 3 * self.total_dim, kernel_size=1, bias=False)
 
+
         # Projection sau khi concat tất cả heads
         self.project_out = nn.Sequential(
             nn.Conv2d(self.total_dim, channel, kernel_size=1, bias=False),
