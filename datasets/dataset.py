@@ -90,6 +90,7 @@ class DatasetDownloader:
         self.extract()
         print(f"{self.dataset_name} dataset has been downloaded and extracted to {self.output_dir}")
 
+
 class GeneralDataset:
     """
     General dataset class wrapper using torchvision.datasets.
@@ -176,7 +177,7 @@ class GeneralDataset:
         if self.dataset_name == ("Caltech101"):
             return Caltech101(root=self.image_path, download=True, transform=None)
         if self.dataset_name == ("Caltech256"):
-             return Caltech256(root=self.image_path, download=True, transform=None)
+            return Caltech256(root=self.image_path, download=True, transform=None)
         elif self.dataset_name == "STL10":
             split = "unlabeled" if self.data_type == "unlabeled" else self.data_type
             return STL10(root=self.image_path, split=split, download=True, transform=None)
@@ -221,8 +222,8 @@ class GeneralDataset:
         Get the number of classes in the dataset by checking unique labels.
         """
         all_labels = [self.full_dataset[idx][1] for idx in range(len(self.full_dataset))]
-        unique_labels = set(all_labels)  # Lấy danh sách các nhãn duy nhất
-        return len(unique_labels)  # Tổng số lớp
+        unique_labels = set(all_labels)
+        return len(unique_labels)
 
     def print_indices(self):
         """
@@ -268,7 +269,7 @@ class GeneralDataset:
             # Truyền ảnh và nhãn vào subplot
             ax = axes[i]
             ax.imshow(denormalized_image)
-            #ax.set_title(f"Label: {label}")
+            # ax.set_title(f"Label: {label}")
             ax.axis("off")
 
             # Ẩn các ô thừa (trường hợp số ảnh không chia hết cho số cột)
@@ -362,4 +363,3 @@ if __name__ == '__main__':
         print(f"Batch {batch_idx}: Images shape: {images.shape}, Labels shape: {labels.shape}")
         break
     # save_random_images(caltech101_test, num_images=10, output_dir="./images")
-

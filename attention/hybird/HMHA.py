@@ -8,7 +8,6 @@ class HMHA(nn.Module):
         self.num_heads = num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
 
-        # Giảm chiều để tiết kiệm tính toán
         self.dim_per_head = max(channel // reduction // num_heads, 1)
         self.total_dim = self.dim_per_head * num_heads
 

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from pytorchcv.model_provider import get_model as ptcv_get_model
+from attention.hybird.HMHA_CBAM import HMHA_CBAM
 
 
 class VGG16(torch.nn.Module):
@@ -16,15 +17,11 @@ class VGG16(torch.nn.Module):
         super().__init__()
         # Load the base VGG16 model
         self.vgg16 = ptcv_get_model("vgg16", pretrained=pretrained)
-        # Global Average Pooling (GAP)
-        self.adaptive_avg_pool = nn.AdaptiveAvgPool2d(output_size=(7, 7)) # dùng lại adaptive avgpooling
-        #self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        #self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
+        self.attention_module = attention
+        self.adaptive_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
-        # Redefine Fully Connected layers for flexible input
         self.classifier = nn.Sequential(
-            #nn.Linear(512, 4096),  # 512 là số kênh đầu ra từ feature extractor VGG16
-            nn.Linear(512 * 7 * 7,4096),
+            nn.Linear(128 + 512, 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
             nn.Linear(4096, 4096),
@@ -32,13 +29,6 @@ class VGG16(torch.nn.Module):
             nn.Dropout(0.5),
             nn.Linear(4096, num_classes),
         )
-        # Handle attention
-        if isinstance(attention, nn.Module):
-            self.attention_module = attention
-            #self._replace_init_block_with_attention()
-            self._insert_attention_after_block4()
-        else:
-            self.attention_module = None  # No attention by default
 
     def _replace_init_block_with_attention(self):
         """
@@ -90,46 +80,38 @@ class VGG16(torch.nn.Module):
         Returns:
             torch.Tensor: The model output.
         """
-        x = self.vgg16.features(x)  # Pass through feature extractor
-        x = self.adaptive_avg_pool(x)  # AAP
-        x = torch.flatten(x, 1)  # Flatten to shape (batch_size, 512)
-        x = self.classifier(x)  # Pass through classifier
+        # x = self.vgg16.features(x)  # Pass through feature extractor
+        # x = self.adaptive_avg_pool(x)  # AAP
+        # x = torch.flatten(x, 1)  # Flatten to shape (batch_size, 512)
+        # x = self.classifier(x)  # Pass through classifier
+        # Stage 1 (thường conv + relu + pool)
+        x = self.vgg16.features.stage1(x)  # (batch, 64, H/2, W/2)
+        # Stage 2
+        x = self.vgg16.features.stage2(x)  # (batch, 128, H/4, W/4)
+
+        # ----------- Nhánh giữa -----------
+        mid_feat = self.attention_module(x)  # (batch, 128, H/4, W/4) giả sử sau attention không đổi số kênh
+        mid_feat = self.adaptive_avg_pool(mid_feat)  # (batch, 128, 1, 1) nếu dùng GAP (pool về 1x1)
+        mid_feat = mid_feat.view(mid_feat.size(0), -1)  # (batch, 128)
+
+        # ----------- Nhánh cao ------------
+        high_feat = self.vgg16.features.stage3(x)  # (batch, 256, H/8, W/8)
+        high_feat = self.vgg16.features.stage4(high_feat)  # (batch, 512, H/16, W/16)
+        high_feat = self.vgg16.features.stage5(high_feat)  # (batch, 512, H/32, W/32)
+        high_feat = self.adaptive_avg_pool(high_feat)  # (batch, 512, 1, 1)
+        high_feat = high_feat.view(high_feat.size(0), -1)  # (batch, 512)
+
+        # ----------- Fusion & Classifier -----------
+        fused_feat = torch.cat([mid_feat, high_feat], dim=1)  # (batch, 128 + 512)
+        x = self.classifier(fused_feat)
         return x
 
 
 if __name__ == '__main__':
     # Import custom attention modules
-    from attention.CBAM import CBAMBlock
-    from attention.BAM import BAMBlock
-    from attention.scSE import scSEBlock
+    mha_cbam = HMHA_CBAM(channel=128, num_heads=8, reduction=16, kernel_size=7)
+    model = VGG16(pretrained=False, attention=mha_cbam, num_classes=10)
 
-    # Initialize models with different attention mechanisms
-    cbam_module = CBAMBlock(channel=512, reduction=16, kernel_size=7)
-    model_cbam = VGG16(pretrained=False, attention=cbam_module)
-
-    bam_module = BAMBlock(channel=512, reduction=16, dia_val=2)
-    model_bam = VGG16(pretrained=False, attention=bam_module)
-
-    scse_module = scSEBlock(channel=512)
-    model_scse = VGG16(pretrained=False, attention=scse_module)
-
-    # Test model without attention
-    model_no_attention = VGG16(pretrained=False)
-
-    # Input tensor
-    x = torch.randn(10, 3, 224, 224)
-
-    # Test models
-    outputs_cbam = model_cbam(x)
-    print("CBAM Output Shape:", outputs_cbam.shape)
-
-    outputs_bam = model_bam(x)
-    print("BAM Output Shape:", outputs_bam.shape)
-
-    outputs_scse = model_scse(x)
-    print("scSE Output Shape:", outputs_scse.shape)
-
-    outputs_no_attention = model_no_attention(x)
-    print("No Attention Output Shape:", outputs_no_attention.shape)
-
-    print(model_cbam)
+    x = torch.randn(8, 3, 224, 224)
+    y = model(x)
+    print("Output shape:", y.shape)

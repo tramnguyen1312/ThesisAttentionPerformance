@@ -24,10 +24,10 @@ def parse_arguments():
     parser.add_argument("--backbone", type=str, default="VGG16",
                         choices=["VGG16", "ResNet18"],
                         help="Choose the backbone model (default: VGG16)")
-    parser.add_argument("--attention", type=str, default="CBAM",
+    parser.add_argument("--attention", type=str, default="MHA_CBAM",
                         choices=["CBAM", "BAM", "scSE", "none", "MHA_CBAM"],
                         help="Choose an attention mechanism or none (default: CBAM)")
-    parser.add_argument("--num_workers", type=int, default=0,
+    parser.add_argument("--num_workers", type=int, default=0,  
                         help="Number of workers for DataLoader (default: 0)")
 
     # Training hyperparameters  
