@@ -43,10 +43,16 @@ class HMHA(nn.Module):
         k = k.transpose(-2, -1)  # B, num_heads, H*W, dim_per_head
         v = v.transpose(-2, -1)  # B, num_heads, H*W, dim_per_head
 
+        # # Attention map calculation
+        # q = F.normalize(q, dim=-1)
+        # k = F.normalize(k, dim=-1)
+        # attn = (q @ k.transpose(-2, -1)) * self.temperature  # B, num_heads, H*W, H*W
+        # attn = F.softmax(attn, dim=-1)
+
         # Attention map calculation
         q = F.normalize(q, dim=-1)
         k = F.normalize(k, dim=-1)
-        attn = (q @ k.transpose(-2, -1)) * self.temperature  # B, num_heads, H*W, H*W
+        attn = (q @ k.transpose(-1, -2)) * self.temperature  # B, num_heads, H*W, H*W
         attn = F.softmax(attn, dim=-1)
 
         # Apply attention to value
