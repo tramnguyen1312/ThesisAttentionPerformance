@@ -21,7 +21,7 @@ class VGG16(torch.nn.Module):
         self.adaptive_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
         self.classifier = nn.Sequential(
-            nn.Linear(128 + 512, 4096),
+            nn.Linear(256 + 512, 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
             nn.Linear(4096, 4096),
@@ -89,14 +89,15 @@ class VGG16(torch.nn.Module):
         # Stage 2
         x = self.vgg16.features.stage2(x)  # (batch, 128, H/4, W/4)
 
+        x = self.vgg16.features.stage3(x)
+
         # ----------- Nhánh giữa -----------
         mid_feat = self.attention_module(x)  # (batch, 128, H/4, W/4) giả sử sau attention không đổi số kênh
         mid_feat = self.adaptive_avg_pool(mid_feat)  # (batch, 128, 1, 1) nếu dùng GAP (pool về 1x1)
         mid_feat = mid_feat.view(mid_feat.size(0), -1)  # (batch, 128)
 
         # ----------- Nhánh cao ------------
-        high_feat = self.vgg16.features.stage3(x)  # (batch, 256, H/8, W/8)
-        high_feat = self.vgg16.features.stage4(high_feat)  # (batch, 512, H/16, W/16)
+        high_feat = self.vgg16.features.stage4(x)  # (batch, 512, H/16, W/16)
         high_feat = self.vgg16.features.stage5(high_feat)  # (batch, 512, H/32, W/32)
         high_feat = self.adaptive_avg_pool(high_feat)  # (batch, 512, 1, 1)
         high_feat = high_feat.view(high_feat.size(0), -1)  # (batch, 512)
@@ -109,7 +110,7 @@ class VGG16(torch.nn.Module):
 
 if __name__ == '__main__':
     # Import custom attention modules
-    mha_cbam = HMHA_CBAM(channel=128, num_heads=8, reduction=16, kernel_size=7)
+    mha_cbam = HMHA_CBAM(channel=256, num_heads=8, reduction=16, kernel_size=7)
     model = VGG16(pretrained=False, attention=mha_cbam, num_classes=10)
 
     x = torch.randn(8, 3, 224, 224)
