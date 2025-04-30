@@ -93,14 +93,17 @@ class VGG16(torch.nn.Module):
 
         x = self.vgg16.features.stage4(x)
 
+        x = self.vgg16.features.stage5(x)
+
+        x_for_att = x.clone()
+
         # ----------- Nhánh giữa -----------
-        mid_feat = self.attention_module(x.detach())
+        mid_feat = self.attention_module(x_for_att)  # (batch, 128, H/4, W/4) giả sử sau attention không đổi số kênh
         mid_feat = self.adaptive_avg_pool(mid_feat)  # (batch, 128, 1, 1) nếu dùng GAP (pool về 1x1)
         mid_feat = mid_feat.view(mid_feat.size(0), -1)  # (batch, 128)
 
         # ----------- Nhánh cao ------------
-        high_feat = self.vgg16.features.stage5(x)
-        high_feat = self.adaptive_avg_pool(high_feat)  # (batch, 512, 1, 1)
+        high_feat = self.adaptive_avg_pool(x)  # (batch, 512, 1, 1)
         high_feat = high_feat.view(high_feat.size(0), -1)  # (batch, 512)
 
         # ----------- Fusion & Classifier -----------
