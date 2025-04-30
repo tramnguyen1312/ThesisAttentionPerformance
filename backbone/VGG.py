@@ -20,7 +20,8 @@ class VGG16(torch.nn.Module):
         self.vgg16 = ptcv_get_model("vgg16", pretrained=pretrained)
         self.attention_module = attention
         self.adaptive_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.bn = nn.BatchNorm2d(512)
+        self.bn_mid = nn.BatchNorm1d(512)
+        self.bn_high = nn.BatchNorm1d(512)
 
         self.classifier = nn.Sequential(
             nn.Linear(512 + 512, 4096),
@@ -101,7 +102,7 @@ class VGG16(torch.nn.Module):
 
         # ----------- Nhánh giữa -----------
         mid_feat = self.attention_module(x_for_att)  # (batch, 128, H/4, W/4) giả sử sau attention không đổi số kênh
-        mid_feat = self.bn(mid_feat)
+        #mid_feat = self.bn(mid_feat)
         mid_feat = self.adaptive_avg_pool(mid_feat)  # (batch, 128, 1, 1) nếu dùng GAP (pool về 1x1)
         mid_feat = mid_feat.view(mid_feat.size(0), -1)  # (batch, 128)
 
@@ -110,8 +111,8 @@ class VGG16(torch.nn.Module):
         high_feat = high_feat.view(high_feat.size(0), -1)  # (batch, 512)
 
         # ----------- Fusion & Classifier -----------
-        mid_feat = F.normalize(mid_feat, dim=1)
-        high_feat = F.normalize(high_feat, dim=1)
+        mid_feat = self.bn_mid(mid_feat)
+        high_feat = self.bn_high(high_feat)
         fused_feat = torch.cat([mid_feat, high_feat], dim=1)  # (batch, 128 + 512)
         x = self.classifier(fused_feat)
         return x
