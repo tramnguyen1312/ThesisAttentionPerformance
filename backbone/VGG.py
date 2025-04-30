@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from pytorchcv.model_provider import get_model as ptcv_get_model
 from attention.hybird.HMHA_CBAM import HMHA_CBAM
+import torch.nn.functional as F
 
 
 class VGG16(torch.nn.Module):
@@ -24,10 +25,10 @@ class VGG16(torch.nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(512 + 512, 4096),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.5),
+            nn.Dropout(0.3),
             nn.Linear(4096, 4096),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.5),
+            nn.Dropout(0.3),
             nn.Linear(4096, num_classes),
         )
 
@@ -109,6 +110,8 @@ class VGG16(torch.nn.Module):
         high_feat = high_feat.view(high_feat.size(0), -1)  # (batch, 512)
 
         # ----------- Fusion & Classifier -----------
+        mid_feat = F.normalize(mid_feat, dim=1)
+        high_feat = F.normalize(high_feat, dim=1)
         fused_feat = torch.cat([mid_feat, high_feat], dim=1)  # (batch, 128 + 512)
         x = self.classifier(fused_feat)
         return x
