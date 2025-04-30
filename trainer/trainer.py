@@ -128,6 +128,14 @@ class DatasetTrainer(Trainer):
             return CosineAnnealingLR(self.optimizer, T_max=10, eta_min=self.min_lr, verbose=True)
         elif self.scheduler_choice == "CosineAnnealingWarmRestarts":
             return CosineAnnealingWarmRestarts(self.optimizer, T_0=10, T_mult=2, eta_min=self.min_lr, verbose=True)
+        elif self.scheduler_choice == "OneCycleLR":
+            return torch.optim.lr_scheduler.OneCycleLR(
+                self.optimizer,
+                max_lr=self.learning_rate,
+                steps_per_epoch=len(self.train_loader),
+                epochs=self.max_epochs,
+                pct_start=0.3
+            )
         else:
             print("No learning rate scheduler selected.")
             return None
@@ -164,6 +172,8 @@ class DatasetTrainer(Trainer):
             # Backward pass and optimization
             self.optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+
             self.optimizer.step()
 
             # Track metrics

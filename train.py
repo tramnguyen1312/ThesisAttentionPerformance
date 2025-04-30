@@ -38,7 +38,7 @@ def parse_arguments():
     parser.add_argument("--optimizer", type=str, default="RAdam",
                         choices=["RAdam", "Adam", "SGD", "AdamW"], help="Optimizer to use (default: RAdam)")
     parser.add_argument("--lr_scheduler", type=str, default="ReduceLROnPlateau",
-                        choices=["ReduceLROnPlateau", "StepLR", "CosineAnnealingLR", "CosineAnnealingWarmRestarts", "None"],
+                        choices=["ReduceLROnPlateau", "StepLR", "CosineAnnealingLR", "CosineAnnealingWarmRestarts", "OneCycleLR", "None"],
                         help="Learning rate scheduler to use (default: ReduceLROnPlateau)")
     parser.add_argument("--max_epoch", type=int, default=10, help="Maximum number of training epochs (default: 10)")
     parser.add_argument("--early_stopping_patience", type=int, default=10, help="Maximum number of training epochs (default: 10)")
