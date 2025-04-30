@@ -93,23 +93,19 @@ class VGG16(torch.nn.Module):
 
         x = self.vgg16.features.stage4(x)
 
-        # Clone để tránh xung đột gradient
-        x_for_att = x.clone()
+        # ----------- Nhánh giữa -----------
+        mid_feat = self.attention_module(x.detach())
+        mid_feat = self.adaptive_avg_pool(mid_feat)  # (batch, 128, 1, 1) nếu dùng GAP (pool về 1x1)
+        mid_feat = mid_feat.view(mid_feat.size(0), -1)  # (batch, 128)
 
-        # Nhánh giữa
-        mid_feat = self.attention_module(x_for_att)  # (batch, 512, H/16, W/16)
-        mid_feat = self.adaptive_avg_pool(mid_feat)
-        mid_feat = mid_feat.view(mid_feat.size(0), -1)  # (batch, 512)
-
-        # Nhánh cao
+        # ----------- Nhánh cao ------------
         high_feat = self.vgg16.features.stage5(x)
-        high_feat = self.adaptive_avg_pool(high_feat)
-        high_feat = high_feat.view(high_feat.size(0), -1)
+        high_feat = self.adaptive_avg_pool(high_feat)  # (batch, 512, 1, 1)
+        high_feat = high_feat.view(high_feat.size(0), -1)  # (batch, 512)
 
-        # Kết hợp
-        fused_feat = torch.cat([mid_feat, high_feat], dim=1)
+        # ----------- Fusion & Classifier -----------
+        fused_feat = torch.cat([mid_feat, high_feat], dim=1)  # (batch, 128 + 512)
         x = self.classifier(fused_feat)
-
         return x
 
 
