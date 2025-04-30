@@ -67,8 +67,8 @@ class HMHA_CBAM(nn.Module):
         self.cbam = CBAMBlock(channel, reduction, kernel_size)
 
         # Fusion weights (learnable scalar)
-        self.alpha = nn.Parameter(torch.tensor(0.5))  # weight for MHA
-        self.beta = nn.Parameter(torch.tensor(0.5))   # weight for CBAM
+        self.alpha = nn.Parameter(torch.tensor(0.0))  # weight for MHA
+        self.beta = nn.Parameter(torch.tensor(1.0))   # weight for CBAM
 
         # Optional normalization + activation
         self.fusion_bn = nn.BatchNorm2d(channel)
@@ -81,12 +81,16 @@ class HMHA_CBAM(nn.Module):
         # Normalize each path before fusion (optional but helpful)
         mha_out = F.normalize(mha_out, dim=1)
         cbam_out = F.normalize(cbam_out, dim=1)
-
+        print("MHA shape:", mha_out.shape)
+        print("CBAM shape:", cbam_out.shape)
+        print("MHA mean:", mha_out.mean().item(), "CBAM mean:", cbam_out.mean().item())
         # Learnable weighted fusion
         fused = self.alpha * mha_out + self.beta * cbam_out
 
         # Optional final processing
         fused = self.fusion_bn(fused)
         fused = self.fusion_act(fused)
+
+        print("Fused:", fused.mean().item(), fused.std().item())
 
         return fused
