@@ -19,6 +19,7 @@ class VGG16(torch.nn.Module):
         self.vgg16 = ptcv_get_model("vgg16", pretrained=pretrained)
         self.attention_module = attention
         self.adaptive_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.bn = nn.BatchNorm2d(512)
 
         self.classifier = nn.Sequential(
             nn.Linear(512 + 512, 4096),
@@ -99,6 +100,7 @@ class VGG16(torch.nn.Module):
 
         # ----------- Nhánh giữa -----------
         mid_feat = self.attention_module(x_for_att)  # (batch, 128, H/4, W/4) giả sử sau attention không đổi số kênh
+        mid_feat = self.bn(mid_feat)
         mid_feat = self.adaptive_avg_pool(mid_feat)  # (batch, 128, 1, 1) nếu dùng GAP (pool về 1x1)
         mid_feat = mid_feat.view(mid_feat.size(0), -1)  # (batch, 128)
 
