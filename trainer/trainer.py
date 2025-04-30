@@ -121,7 +121,7 @@ class DatasetTrainer(Trainer):
     def _initialize_scheduler(self):
         """Set up the learning rate scheduler."""
         if self.scheduler_choice == "ReduceLROnPlateau":
-            return ReduceLROnPlateau(self.optimizer, patience=5, factor=0.1, min_lr=self.min_lr, verbose=True)
+            return ReduceLROnPlateau(self.optimizer, patience=5, factor=0.5, min_lr=self.min_lr, verbose=True)
         elif self.scheduler_choice == "StepLR":
             return StepLR(self.optimizer, step_size=10, gamma=0.1)
         elif self.scheduler_choice == "CosineAnnealingLR":
