@@ -13,6 +13,12 @@ import tqdm
 from torch.utils.data import DataLoader
 import wandb  # Import wandb for logging
 import csv
+from torch.optim.lr_scheduler import LambdaLR
+
+def lr_lambda(epoch):
+    if epoch < 5:  # Warmup
+        return 0.1 + 0.9 * epoch / 5
+    return 1.0
 
 class EarlyStopping:
     def __init__(self, patience=7, delta=0):
@@ -128,6 +134,8 @@ class DatasetTrainer(Trainer):
             return CosineAnnealingLR(self.optimizer, T_max=10, eta_min=self.min_lr, verbose=True)
         elif self.scheduler_choice == "CosineAnnealingWarmRestarts":
             return CosineAnnealingWarmRestarts(self.optimizer, T_0=10, T_mult=2, eta_min=self.min_lr, verbose=True)
+        elif self.scheduler_choice == "LambdaLR":
+            return LambdaLR(self.optimizer, self.learning_rate)
         elif self.scheduler_choice == "OneCycleLR":
             return torch.optim.lr_scheduler.OneCycleLR(
                 self.optimizer,
