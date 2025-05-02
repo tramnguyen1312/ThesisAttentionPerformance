@@ -121,6 +121,7 @@ def main():
         attention_module = None
     elif args.attention == "MHA_CBAM":
         attention_module = HMHA_CBAM(channel=512, num_heads=8, reduction=16)
+        #attention_module = HMHA_CBAM_v2(channel=512, num_heads=8, reduction=16, attention_type='CBAM')
 
      # Select backbone model
     model = None
