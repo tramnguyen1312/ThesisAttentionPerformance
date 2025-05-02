@@ -126,3 +126,27 @@ if __name__ == '__main__':
     x = torch.randn(8, 3, 224, 224)
     y = model(x)
     print("Output shape:", y.shape)
+
+    from torch_lr_finder import LRFinder
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-7, weight_decay=0.01)
+    criterion = nn.CrossEntropyLoss()
+    # Initialize train and test datasets
+    from datasets import GeneralDataset
+    train_dataset = GeneralDataset(
+        data_type="train",
+        dataset_name='STL10',
+        image_size=224,
+        image_path="./datasets/datasets",
+        random_seed=42
+    )
+    lr_finder = LRFinder(model, optimizer, criterion, device="cuda")
+    from torch.utils.data import DataLoader
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=32,
+        shuffle=True,  # Shuffle dataset
+        num_workers=0  # Để tránh lỗi đa luồng
+    )
+    lr_finder.range_test(train_loader, end_lr=10, num_iter=100).to('cpu')
+    lr_finder.plot()

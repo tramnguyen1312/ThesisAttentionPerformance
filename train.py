@@ -2,7 +2,7 @@ import argparse
 import torch
 from trainer import DatasetTrainer
 from backbone import ResNet18, VGG16
-from attention import CBAMBlock, BAMBlock, scSEBlock, HMHA_CBAM
+from attention import CBAMBlock, BAMBlock, scSEBlock, HMHA_CBAM, HMHA_CBAM_v2
 from datasets import GeneralDataset
 from torch.utils.data import DataLoader
 
@@ -120,7 +120,7 @@ def main():
     elif args.attention == "none":
         attention_module = None
     elif args.attention == "MHA_CBAM":
-        attention_module = HMHA_CBAM(channel=512, num_heads=8, reduction=16, kernel_size=7)
+        attention_module = HMHA_CBAM_v2(channel=512, num_heads=8, reduction=16, attention_type='CBAM')
 
      # Select backbone model
     model = None
