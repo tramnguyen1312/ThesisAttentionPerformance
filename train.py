@@ -144,7 +144,7 @@ def main():
         "project_name": args.wandb_project,
         "run_name": args.wandb_run,
         "early_stopping_patience": args.early_stopping_patience,
-        "warmup_epochs": 5,
+        "warmup_epochs": 15,
     }
     if model is not None:
         print(model)

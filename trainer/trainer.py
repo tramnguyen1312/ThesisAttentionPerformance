@@ -106,7 +106,7 @@ class DatasetTrainer(Trainer):
         # Optimizer, Scheduler, and Loss
         self.optimizer = self._initialize_optimizer()
         self.scheduler = self._initialize_scheduler()
-        self.criterion = nn.CrossEntropyLoss().to(self.device)
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.05).to(self.device)
 
         # Checkpoint and Logging
         self.start_time = datetime.datetime.now()
