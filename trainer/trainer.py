@@ -19,6 +19,29 @@ def lr_lambda(epoch):
     if epoch < 5:  # Warmup
         return 0.1 + 0.9 * epoch / 5
     return 1.0
+import math
+
+class CosineWarmupScheduler(torch.optim.lr_scheduler._LRScheduler):
+    def __init__(self, optimizer, warmup_epochs, max_epochs, min_lr=0, last_epoch=-1):
+        self.warmup_epochs = warmup_epochs
+        self.max_epochs = max_epochs
+        self.min_lr = min_lr
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        if self.last_epoch < self.warmup_epochs:
+            # Linear warmup
+            return [
+                base_lr * (self.last_epoch + 1) / self.warmup_epochs
+                for base_lr in self.base_lrs
+            ]
+        else:
+            # Cosine annealing
+            progress = (self.last_epoch - self.warmup_epochs) / (self.max_epochs - self.warmup_epochs)
+            return [
+                self.min_lr + (base_lr - self.min_lr) * 0.5 * (1 + math.cos(math.pi * progress))
+                for base_lr in self.base_lrs
+            ]
 
 class EarlyStopping:
     def __init__(self, patience=7, delta=0):
@@ -135,7 +158,7 @@ class DatasetTrainer(Trainer):
         elif self.scheduler_choice == "CosineAnnealingWarmRestarts":
             return CosineAnnealingWarmRestarts(self.optimizer, T_0=10, T_mult=2, eta_min=self.min_lr, verbose=True)
         elif self.scheduler_choice == "LambdaLR":
-            return LambdaLR(self.optimizer, self.learning_rate)
+            return LambdaLR(self.optimizer, lr_lambda)
         elif self.scheduler_choice == "OneCycleLR":
             return torch.optim.lr_scheduler.OneCycleLR(
                 self.optimizer,
@@ -143,6 +166,14 @@ class DatasetTrainer(Trainer):
                 steps_per_epoch=len(self.train_loader),
                 epochs=self.max_epochs,
                 pct_start=0.3
+            )
+        elif self.scheduler_choice == "CosineWarmup":
+            warmup_epochs = self.configs.get("warmup_epochs", 5)
+            return CosineWarmupScheduler(
+                self.optimizer,
+                warmup_epochs=warmup_epochs,
+                max_epochs=self.max_epochs,
+                min_lr=self.min_lr
             )
         else:
             print("No learning rate scheduler selected.")

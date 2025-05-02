@@ -19,7 +19,8 @@ class HMHA(nn.Module):
         # Output projection
         self.project_out = nn.Sequential(
             nn.Conv2d(self.total_dim, channel, kernel_size=1, bias=False),
-            nn.BatchNorm2d(channel)
+            nn.BatchNorm2d(channel),
+            nn.Dropout2d(0.1)
         )
 
         # Optional residual block
