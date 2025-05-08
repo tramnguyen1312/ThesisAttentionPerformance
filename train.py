@@ -51,7 +51,7 @@ if __name__ == '__main__':
         cudnn.benchmark = True
 
     # Define your model here (replace with your custom model if needed)
-    model = VGG16(attn_type='cbam', num_heads=8, weights=None, num_classes=10)
+    model = VGG16(num_classes=10)
 
     # Run trainer
     trainer = Trainer(args, model)

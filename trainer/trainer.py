@@ -69,6 +69,10 @@ class Trainer:
     def run(self):
         from dataloader import get_data_loaders  # Import here to avoid circular import
         trainloader, testloader = get_data_loaders(self.args)
+        images, labels = next(iter(trainloader))
+
+        # In kích thước ảnh
+        print(images.shape)
         init_params(self.net)
 
         if self.args.ngpu > 1:
