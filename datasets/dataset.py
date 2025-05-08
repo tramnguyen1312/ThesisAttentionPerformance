@@ -31,7 +31,48 @@ import gdown
 import os
 import zipfile
 import ssl
+from PIL import Image
 
+class RAFDBDataset:
+    """
+    Class tải và xử lý dataset RAF-DB.
+    - Yêu cầu bạn đã tải và giải nén RAF-DB theo cấu trúc chuẩn.
+    - annotation file chứa list ảnh và nhãn.
+    """
+
+    def __init__(self, root_dir, phase="train", transform=None):
+        """
+        :param root_dir: Thư mục chứa RAF-DB, ví dụ "./datasets/RAF-DB"
+        :param phase: 'train' hoặc 'test'
+        :param transform: transform transforms.Compose object
+        """
+        self.root_dir = root_dir
+        self.phase = phase
+        self.transform = transform
+
+        # Đường dẫn annotation csv của RAF-DB (cần thay theo chuẩn của bạn)
+        anno_file = os.path.join(root_dir, f"list_{phase}.txt")
+
+        # Đọc file annotation (file dạng: "image_path label")
+        self.data = []
+        with open(anno_file, "r") as f:
+            for line in f.readlines():
+                line = line.strip()
+                if not line:
+                    continue
+                img_name, label = line.split()
+                self.data.append((img_name, int(label)))
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        img_name, label = self.data[idx]
+        img_path = os.path.join(self.root_dir, "RAF-DB", "images", img_name)
+        image = Image.open(img_path).convert("RGB")
+        if self.transform:
+            image = self.transform(image)
+        return image, label
 
 class DatasetDownloader:
     def __init__(self, dataset_name, output_dir="./datasets"):
@@ -50,16 +91,16 @@ class DatasetDownloader:
         self.dataset_path = os.path.join(self.output_dir, f"{self.dataset_name}.zip")
 
     def get_download_url(self):
-        """
-        Trả về URL tải xuống từ Google Drive cho dataset.
-        :return: URL tải xuống của dataset.
-        """
         if self.dataset_name == "Caltech101":
-            return "https://drive.google.com/file/d/1lmgZZ2QdDxXiXyrkNzzjvwb6GDwFplLN/view?usp=sharing"
+            return "https://drive.google.com/uc?id=1lmgZZ2QdDxXiXyrkNzzjvwb6GDwFplLN&export=download"
         elif self.dataset_name == "Caltech256":
-            return "https://drive.google.com/file/d/1Ou7A5FmPH6vJ5l-syt7geZhnljes0KEV/view?usp=sharing"
+            return "https://drive.google.com/uc?id=1Ou7A5FmPH6vJ5l-syt7geZhnljes0KEV&export=download"
+        elif self.dataset_name == "RAF-DB":
+            # Link tải RAF-basic.zip từ repo chính thức GitHub
+            return "https://github.com/switchablenorms/Deep-Feature-Learning-RAF-DB/releases/download/v1.0/RAF-basic.zip"
         else:
-            raise ValueError("Dataset không hợp lệ. Chỉ hỗ trợ 'Caltech101' và 'Caltech256'.")
+            raise ValueError("Dataset không hợp lệ. Chỉ hỗ trợ 'Caltech101', 'Caltech256' và 'RAF-DB'.")
+
 
     def download(self):
         """
@@ -183,6 +224,8 @@ class GeneralDataset:
             return STL10(root=self.image_path, split=split, download=True, transform=None)
         elif self.dataset_name == "Oxford-IIIT Pets":
             return OxfordIIITPet(root=self.image_path, download=True, transform=None)
+        elif self.dataset_name == "RAF-DB":
+            return RAFDBDataset(root_dir=self.image_path, phase=self.data_type, transform=None)
         else:
             raise ValueError(f"Dataset {self.dataset_name} is not supported!")
 

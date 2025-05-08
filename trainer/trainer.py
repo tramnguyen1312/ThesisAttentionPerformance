@@ -3,23 +3,21 @@ import datetime
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import (
     ReduceLROnPlateau,
     StepLR,
     CosineAnnealingLR,
     CosineAnnealingWarmRestarts,
+    OneCycleLR,
+    LambdaLR
 )
-import tqdm
-from torch.utils.data import DataLoader
-import wandb  # Import wandb for logging
-import csv
-from torch.optim.lr_scheduler import LambdaLR
-
-def lr_lambda(epoch):
-    if epoch < 5:  # Warmup
-        return 0.1 + 0.9 * epoch / 5
-    return 1.0
 import math
+import numpy as np
+import csv
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 
 class CosineWarmupScheduler(torch.optim.lr_scheduler._LRScheduler):
     def __init__(self, optimizer, warmup_epochs, max_epochs, min_lr=0, last_epoch=-1):
@@ -30,331 +28,223 @@ class CosineWarmupScheduler(torch.optim.lr_scheduler._LRScheduler):
 
     def get_lr(self):
         if self.last_epoch < self.warmup_epochs:
-            # Linear warmup
-            return [
-                base_lr * (self.last_epoch + 1) / self.warmup_epochs
-                for base_lr in self.base_lrs
-            ]
-        else:
-            # Cosine annealing
-            progress = (self.last_epoch - self.warmup_epochs) / (self.max_epochs - self.warmup_epochs)
-            return [
-                self.min_lr + (base_lr - self.min_lr) * 0.5 * (1 + math.cos(math.pi * progress))
-                for base_lr in self.base_lrs
-            ]
+            return [base_lr * (self.last_epoch + 1) / self.warmup_epochs
+                    for base_lr in self.base_lrs]
+        progress = (self.last_epoch - self.warmup_epochs) / (self.max_epochs - self.warmup_epochs)
+        return [self.min_lr + (base_lr - self.min_lr) * 0.5 * (1 + math.cos(math.pi * progress))
+                for base_lr in self.base_lrs]
 
 class EarlyStopping:
-    def __init__(self, patience=7, delta=0):
+    def __init__(self, patience=7, delta=0, monitor='val_acc'):
         self.patience = patience
-        self.counter = 0
-        self.best_loss = None
-        self.early_stop = False
         self.delta = delta
+        self.monitor = monitor
+        self.best = None
+        self.counter = 0
+        self.early_stop = False
 
-    def __call__(self, val_loss):
-        if self.best_loss is None:
-            self.best_loss = val_loss
-        elif val_loss > self.best_loss - self.delta:
+    def __call__(self, metric):
+        if self.best is None or metric > self.best + self.delta:
+            self.best = metric
+            self.counter = 0
+        else:
             self.counter += 1
-            print(f"EarlyStopping counter: {self.counter}/{self.patience}")
             if self.counter >= self.patience:
                 self.early_stop = True
-        else:
-            self.best_loss = val_loss
-            self.counter = 0
-class Trainer:
-    """Base trainer class."""
 
-    def __init__(self):
-        pass
+class DatasetTrainer:
+    def __init__(
+        self,
+        model: nn.Module,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        test_loader: DataLoader,
+        configs: dict
+    ):
+        self.configs = configs
+        self.device = torch.device(configs.get('device', 'cuda'))
+        if configs.get('multi_gpu', False) and torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
+        if configs.get('freeze_backbone', False):
+            for name, p in model.named_parameters():
+                if 'stem' in name or 'features1' in name:
+                    p.requires_grad = False
+        self.model = model.to(self.device)
 
-
-class DatasetTrainer(Trainer):
-    """General Dataset Trainer with WandB integration."""
-
-    def __init__(self, model, train_loader, val_loader, test_loader, configs, wb=False):
-        """
-        Initialize the trainer.
-        :param model: PyTorch model.
-        :param train_loader: DataLoader for training set.
-        :param val_loader: DataLoader for validation set.
-        :param test_loader: DataLoader for testing set.
-        :param configs: Configuration dictionary with hyperparameters.
-        :param wb: Boolean to enable WandB logging (default False).
-        """
-        super().__init__()
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
-        self.configs = configs
-        self.wb = wb
 
-        # Device setup
-        self.device = torch.device(configs["device"])
-        self.model = model.to(self.device)
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=configs.get('label_smoothing', 0.0)).to(self.device)
+        decay, no_decay = [], []
+        for name, p in self.model.named_parameters():
+            if not p.requires_grad:
+                continue
+            if p.ndim == 1 or name.endswith('.bias') or 'norm' in name.lower():
+                no_decay.append(p)
+            else:
+                decay.append(p)
+        self.optimizer = optim.AdamW([
+            {'params': decay, 'weight_decay': configs.get('weight_decay', 1e-4)},
+            {'params': no_decay, 'weight_decay': 0.0}
+        ], lr=configs.get('lr', 1e-3), betas=(0.9,0.999), eps=1e-8)
 
-        # Hyperparameters
-        self.batch_size = configs["batch_size"]
-        self.learning_rate = configs["lr"]
-        self.min_lr = configs["min_lr"]
-        self.weight_decay = configs["weight_decay"]
-        self.optimizer_choice = configs["optimizer"]
-        self.scheduler_choice = configs["lr_scheduler"]
-        self.max_epochs = configs["max_epoch_num"]
-        self.best_val_acc = 0.0
-
-        # Optimizer, Scheduler, and Loss
-        self.optimizer = self._initialize_optimizer()
-        self.scheduler = self._initialize_scheduler()
-        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.05).to(self.device)
-
-        # Checkpoint and Logging
-        self.start_time = datetime.datetime.now()
-        self.checkpoint_path = configs.get("checkpoint_path", "best_model.pth")
-        self.early_stopping_patience = configs.get("early_stopping_patience", 10)
-        self.early_stopping_counter = 0
-        self.csv_log_path = configs.get("csv_log_path", "training_log.csv")
-        self._initialize_csv_log()
-
-        # WandB setup
-        if self.wb:
-            self._initialize_wandb()
-
-    def _initialize_csv_log(self):
-        # Open CSV log file and write header
-        with open(self.csv_log_path, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                "epoch",
-                "train_loss",
-                "train_accuracy",
-                "val_loss",
-                "val_accuracy",
-                "learning_rate"
-            ])
-
-    def _initialize_optimizer(self):
-        """Set up the optimizer."""
-        if self.optimizer_choice == "Adam":
-            return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        elif self.optimizer_choice == "SGD":
-            return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.9,
-                                   weight_decay=self.weight_decay)
-        elif self.optimizer_choice == "RAdam":
-            return torch.optim.RAdam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        elif self.optimizer_choice == "AdamW":
-            return torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate,betas=(0.9, 0.999), eps=1e-8, weight_decay=self.weight_decay)
-        else:
-            raise ValueError(f"Unsupported optimizer: {self.optimizer_choice}.")
-
-    def _initialize_scheduler(self):
-        """Set up the learning rate scheduler."""
-        if self.scheduler_choice == "ReduceLROnPlateau":
-            return ReduceLROnPlateau(self.optimizer, patience=5, factor=0.5, min_lr=self.min_lr, verbose=True)
-        elif self.scheduler_choice == "StepLR":
-            return StepLR(self.optimizer, step_size=10, gamma=0.1)
-        elif self.scheduler_choice == "CosineAnnealingLR":
-            return CosineAnnealingLR(self.optimizer, T_max=10, eta_min=self.min_lr, verbose=True)
-        elif self.scheduler_choice == "CosineAnnealingWarmRestarts":
-            return CosineAnnealingWarmRestarts(self.optimizer, T_0=10, T_mult=2, eta_min=self.min_lr, verbose=True)
-        elif self.scheduler_choice == "LambdaLR":
-            return LambdaLR(self.optimizer, lr_lambda)
-        elif self.scheduler_choice == "OneCycleLR":
-            return torch.optim.lr_scheduler.OneCycleLR(
+        sched_choice = configs.get('lr_scheduler', None)
+        if sched_choice == 'ReduceLROnPlateau':
+            self.scheduler = ReduceLROnPlateau(self.optimizer, patience=5,
+                                              factor=0.5, min_lr=configs.get('min_lr',1e-6), verbose=True)
+        elif sched_choice == 'StepLR':
+            self.scheduler = StepLR(self.optimizer, step_size=configs.get('step_size',30),
+                                    gamma=configs.get('step_gamma',0.1))
+        elif sched_choice == 'CosineAnnealingLR':
+            self.scheduler = CosineAnnealingLR(self.optimizer, T_max=configs.get('t_max',50),
+                                               eta_min=configs.get('min_lr',1e-6), verbose=True)
+        elif sched_choice == 'CosineAnnealingWarmRestarts':
+            self.scheduler = CosineAnnealingWarmRestarts(
+                self.optimizer, T_0=configs.get('t_0',10), T_mult=configs.get('t_mult',2),
+                eta_min=configs.get('min_lr',1e-6), verbose=True)
+        elif sched_choice == 'OneCycleLR':
+            self.scheduler = OneCycleLR(
                 self.optimizer,
-                max_lr=self.learning_rate,
+                max_lr=configs.get('lr',1e-3),
                 steps_per_epoch=len(self.train_loader),
-                epochs=self.max_epochs,
-                pct_start=0.3
+                epochs=configs.get('max_epochs',100),
+                pct_start=configs.get('pct_start',0.3),
+                anneal_strategy='cos',
+                div_factor=configs.get('div_factor',25),
+                final_div_factor=configs.get('final_div_factor',1e4)
             )
-        elif self.scheduler_choice == "CosineWarmup":
-            warmup_epochs = self.configs.get("warmup_epochs", 5)
-            return CosineWarmupScheduler(
+        elif sched_choice == 'CosineWarmup':
+            self.scheduler = CosineWarmupScheduler(
                 self.optimizer,
-                warmup_epochs=warmup_epochs,
-                max_epochs=self.max_epochs,
-                min_lr=self.min_lr
+                warmup_epochs=configs.get('warmup_epochs',5),
+                max_epochs=configs.get('max_epochs',100),
+                min_lr=configs.get('min_lr',1e-6)
             )
+        elif sched_choice == 'LambdaLR':
+            self.scheduler = LambdaLR(self.optimizer, lr_lambda=lambda e: 1.0 if e>=5 else 0.1+0.9*e/5)
         else:
-            print("No learning rate scheduler selected.")
-            return None
+            self.scheduler = None
 
-    def _initialize_wandb(self):
-        """Initialize WandB."""
-        wandb.login(key=self.configs["wandb_api_key"])
-        wandb.init(
-            project=self.configs["project_name"],
-            name=self.configs.get("run_name", f"run_{datetime.datetime.now()}"),
-            config=self.configs,
-        )
-        wandb.watch(self.model, log="all", log_freq=10)
-        print("WandB initialized.")
+        self.use_amp = configs.get('use_amp', False)
+        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
 
-    def train_one_epoch(self, epoch):
-        """Train the model for one epoch."""
-        self.model.train()
-        running_loss = 0.0
-        correct = 0
-        total = 0
+        self.early_stopper = EarlyStopping(patience=configs.get('early_stopping_patience',10),
+                                           monitor='val_acc')
+        self.checkpoint_path = configs.get('checkpoint_path','checkpoint.pth')
+        self.start_epoch = 1
+        self._maybe_resume()
 
-        for batch_idx, (images, labels) in tqdm.tqdm(
-                enumerate(self.train_loader),
-                total=len(self.train_loader),
-                desc=f"Epoch {epoch}/{self.max_epochs} [Training]",
-                leave=False):
-            images, labels = images.to(self.device), labels.to(self.device)
-
-            # Forward pass
-            outputs = self.model(images)
-            loss = self.criterion(outputs, labels)
-
-            # Backward pass and optimization
-            self.optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-
-            self.optimizer.step()
-
-            # Track metrics
-            running_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += labels.size(0)
-            correct += predicted.eq(labels).sum().item()
-
-
-        avg_loss = running_loss / len(self.train_loader)
-        accuracy = 100.0 * correct / total
-
-        # Log to WandB
-        if self.wb:
-            wandb.log({"Train Loss": avg_loss, "Train Accuracy": accuracy})
-
-        print(f"Train Loss: {avg_loss:.4f}, Train Accuracy: {accuracy:.2f}%")
-        return avg_loss, accuracy
-
-    def validate_one_epoch(self, epoch):
-        """Validate the model for one epoch."""
-        self.model.eval()
-        val_loss = 0.0
-        correct = 0
-        total = 0
-
-        with torch.no_grad():
-            for batch_idx, (images, labels) in tqdm.tqdm(
-                    enumerate(self.val_loader),
-                    total=len(self.val_loader),
-                    desc=f"Epoch {epoch}/{self.max_epochs} [Validation]",
-                    leave=False):
-                images, labels = images.to(self.device), labels.to(self.device)
-
-                # Forward pass
-                outputs = self.model(images)
-                loss = self.criterion(outputs, labels)
-
-                val_loss += loss.item()
-                _, predicted = outputs.max(1)
-                total += labels.size(0)
-                correct += predicted.eq(labels).sum().item()
-
-        avg_loss = val_loss / len(self.val_loader)
-        accuracy = 100.0 * correct / total
-
-        # Log to WandB
-        if self.wb:
-            wandb.log({"Validation Loss": avg_loss, "Validation Accuracy": accuracy})
-
-        print(f"Validation Loss: {avg_loss:.4f}, Validation Accuracy: {accuracy:.2f}%")
-        return avg_loss, accuracy
-
-    def test_model(self):
-        """Evaluate the model on the test set."""
-        self.model.eval()
-        correct = 0
-        total = 0
-
-        with torch.no_grad():
-            for images, labels in tqdm.tqdm(
-                    self.test_loader, total=len(self.test_loader), desc="Testing"):
-                images, labels = images.to(self.device), labels.to(self.device)
-
-                outputs = self.model(images)
-                _, predicted = outputs.max(1)
-                total += labels.size(0)
-                correct += predicted.eq(labels).sum().item()
-
-        accuracy = 100.0 * correct / total
-
-        # Log to WandB
-        if self.wb:
-            wandb.log({"Test Accuracy": accuracy})
-
-        print(f"Test Accuracy: {accuracy:.2f}%")
-        return accuracy
+    def _maybe_resume(self):
+        if self.configs.get('resume_checkpoint', False) and os.path.exists(self.checkpoint_path):
+            ckpt = torch.load(self.checkpoint_path, map_location=self.device)
+            self.model.load_state_dict(ckpt['model'])
+            self.optimizer.load_state_dict(ckpt['optimizer'])
+            if self.scheduler and ckpt.get('scheduler'):
+                self.scheduler.load_state_dict(ckpt['scheduler'])
+            self.start_epoch = ckpt.get('epoch',1) + 1
 
     def train(self):
-        train_hist = {"loss": [], "accuracy": []}
-        val_hist = {"loss": [], "accuracy": []}
-        """Main training loop."""
-        print(self.configs)
-
-        early_stopper = EarlyStopping(patience=self.early_stopping_patience)
-
-        for epoch in range(1, self.max_epochs + 1):
-            print(f"\nEpoch {epoch}/{self.max_epochs}")
-            train_loss, train_acc = self.train_one_epoch(epoch)
-            val_loss, val_acc = self.validate_one_epoch(epoch)
-            # Append training history
-            train_hist["loss"].append(train_loss)
-            train_hist["accuracy"].append(train_acc)
-            val_hist["loss"].append(val_loss)
-            val_hist["accuracy"].append(val_acc)
-
-            # Scheduler step
-            if isinstance(self.scheduler, ReduceLROnPlateau):
-                self.scheduler.step(val_loss)
-            elif self.scheduler is not None:
-                self.scheduler.step()
-            #Write log
-            current_lr = self.optimizer.param_groups[0]['lr']
-            with open(self.csv_log_path, mode='a', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow([
-                    epoch,
-                    train_loss,
-                    train_acc,
-                    val_loss,
-                    val_acc,
-                    current_lr
-                ])
-
-
-            if val_acc > self.best_val_acc:
-                self.best_val_acc = val_acc
-                torch.save(self.model.state_dict(), self.checkpoint_path)
-                print(f"New best model saved with accuracy: {val_acc:.2f}%")
-            early_stopper(val_loss)
-            if early_stopper.early_stop:
-                print("Early stopping triggered!")
+        best_acc = 0.0
+        for epoch in range(self.start_epoch, self.configs.get('max_epochs',100)+1):
+            train_loss, train_correct, train_total = 0,0,0
+            self.model.train()
+            for imgs, labels in self.train_loader:
+                imgs, labels = imgs.to(self.device), labels.to(self.device)
+                self.optimizer.zero_grad()
+                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    outputs = self.model(imgs)
+                    loss = self.criterion(outputs, labels)
+                if self.use_amp:
+                    self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    self.optimizer.step()
+                if isinstance(self.scheduler, OneCycleLR):
+                    self.scheduler.step()
+                train_loss += loss.item()
+                preds = outputs.argmax(dim=1)
+                train_correct += (preds==labels).sum().item()
+                train_total += labels.size(0)
+            train_acc = 100 * train_correct / train_total
+            val_loss, val_acc = self._validate()
+            if self.scheduler and not isinstance(self.scheduler, OneCycleLR):
+                if isinstance(self.scheduler, ReduceLROnPlateau):
+                    self.scheduler.step(val_loss)
+                else:
+                    self.scheduler.step()
+            print(f"Epoch {epoch}: TrainAcc={train_acc:.2f}, ValAcc={val_acc:.2f}")
+            if val_acc > best_acc:
+                best_acc = val_acc
+                torch.save({'epoch': epoch,
+                            'model': self.model.state_dict(),
+                            'optimizer': self.optimizer.state_dict(),
+                            'scheduler': self.scheduler.state_dict() if self.scheduler else None},
+                           self.checkpoint_path)
+                print(f"Saved best model at epoch {epoch}")
+            self.early_stopper(val_acc)
+            if self.early_stopper.early_stop:
+                print("Early stopping")
                 break
+        print(f"Best ValAcc={best_acc:.2f}")
 
-        # Training Summary
-        print("\nTraining Summary:")
-        print(f"Start Time: {self.start_time}")
-        print(f"End Time: {datetime.datetime.now()}")
-        print(f"Best Validation Accuracy: {self.best_val_acc:.2f}%")
-        print(
-            f"Final Training Loss: {train_hist['loss'][-1]:.4f}, Final Training Accuracy: {train_hist['accuracy'][-1]:.2f}%")
-        print(
-            f"Final Validation Loss: {val_hist['loss'][-1]:.4f}, Final Validation Accuracy: {val_hist['accuracy'][-1]:.2f}%")
+    def _validate(self):
+        self.model.eval()
+        loss_sum, correct, total = 0,0,0
+        with torch.no_grad():
+            for imgs, labels in self.val_loader:
+                imgs, labels = imgs.to(self.device), labels.to(self.device)
+                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    outputs = self.model(imgs)
+                    loss = self.criterion(outputs, labels)
+                loss_sum += loss.item()
+                preds = outputs.argmax(dim=1)
+                correct += (preds==labels).sum().item()
+                total += labels.size(0)
+        return loss_sum/len(self.val_loader), 100*correct/total
 
-        # # Log summary to WandB
-        # if self.wb:
-        #     wandb.log({
-        #         "Best Validation Accuracy": self.best_val_acc,
-        #         "Final Training Loss": train_hist["loss"][-1],
-        #         "Final Training Accuracy": train_hist["accuracy"][-1],
-        #         "Final Validation Loss": val_hist["loss"][-1],
-        #         "Final Validation Accuracy": val_hist["accuracy"][-1],
-        #     })
+    def test(self):
+        """Evaluate and save confusion matrix CSV."""
+        self.model.eval()
+        all_preds, all_labels = [], []
+        with torch.no_grad():
+            for imgs, labels in self.test_loader:
+                imgs = imgs.to(self.device)
+                outputs = self.model(imgs)
+                preds = outputs.argmax(dim=1).cpu()
+                all_preds.extend(preds.tolist())
+                all_labels.extend(labels.tolist())
+        acc = 100 * sum(p==l for p, l in zip(all_preds, all_labels)) / len(all_labels)
+        print(f"Test Accuracy: {acc:.2f}%")
+        # compute and save confusion matrix
+        cm = confusion_matrix(all_labels, all_preds)
+        csv_path = self.configs.get('confusion_csv_path', 'confusion_matrix.csv')
+        # save as CSV
+        with open(csv_path, mode='w', newline='') as f:
+            writer = csv.writer(f)
+            # header: class indices
+            writer.writerow([''] + [str(i) for i in range(cm.shape[1])])
+            for i, row in enumerate(cm):
+                writer.writerow([str(i)] + row.tolist())
+        print(f"Confusion matrix saved to {csv_path}")
+        return acc
 
-        print(f"Training complete. Best validation accuracy: {self.best_val_acc:.2f}%")
+# separate plotting function
+def plot_confusion_from_csv(csv_path, class_names=None):
+    """Load confusion matrix from CSV and plot."""
+    cm = np.loadtxt(csv_path, delimiter=',', dtype=int, skiprows=1, usecols=range(1, None))
+    if class_names is not None:
+        labels = class_names
+    else:
+        labels = [str(i) for i in range(cm.shape[0])]
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    disp.plot(cmap=plt.cm.Blues)
+    plt.title('Confusion Matrix')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.show()
