@@ -153,7 +153,7 @@ class DatasetTrainer:
             train_correct = 0
             train_total = 0
             self.model.train()
-            loop = tqdm.tqdm(self.train_loader, desc=f"Epoch [{epoch}/{total_epochs}] Training", leave=False)
+            loop = tqdm.tqdm(self.train_loader, desc=f"Epoch [{epoch}/{total_epochs}] Training", leave=False, ncols=120)
             for imgs, labels in loop:
                 imgs, labels = imgs.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad()
@@ -184,7 +184,7 @@ class DatasetTrainer:
                     self.scheduler.step(val_loss)
                 else:
                     self.scheduler.step()
-            print(f"Epoch {epoch}: TrainAcc={train_acc:.2f}%, ValAcc={val_acc:.2f}%")
+            print(f"Epoch {epoch}: Train accuracy={train_acc:.2f}%, Train loss={train_loss}, Val accuracy={val_acc:.2f}%, Val loss={val_loss}")
             if val_acc > best_acc:
                 best_acc = val_acc
                 torch.save({'epoch': epoch,
@@ -204,7 +204,7 @@ class DatasetTrainer:
         val_loss = 0.0
         correct = 0
         total = 0
-        loop = tqdm.tqdm(self.val_loader, desc=f"Epoch [{epoch}/{total_epochs}] Validation", leave=False)
+        loop = tqdm.tqdm(self.val_loader, desc=f"Epoch [{epoch}/{total_epochs}] Validation", leave=False, ncols=120)
         with torch.no_grad():
             for imgs, labels in loop:
                 imgs, labels = imgs.to(self.device), labels.to(self.device)
