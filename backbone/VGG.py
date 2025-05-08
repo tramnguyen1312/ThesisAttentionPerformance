@@ -43,7 +43,7 @@ class VGG16(torch.nn.Module):
 
 if __name__ == '__main__':
     model_v = VGG16(attn_type='cbam', num_heads=8, weights=None, num_classes=10)
-    inp = torch.randn(128, 3, 224, 224)
+    inp = torch.randn(128, 3, 9, 224)
     out_r = model_v(inp)
     print(model_v)  # e.g. [2, 1000] each
     print(out_r)

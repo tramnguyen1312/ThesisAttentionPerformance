@@ -69,8 +69,8 @@ def get_data_loaders(args):
             if not args.noaug:
                 # with data augmentation
                 transform_train = transforms.Compose([
-                    # transforms.RandomCrop(32, padding=4),
-                    transforms.RandomCrop(96, padding=4),
+                    transforms.Resize(224+32),
+                    transforms.RandomCrop(224, padding=4),
                     transforms.RandomHorizontalFlip(),
                     transforms.ToTensor(),
                     normalize,
