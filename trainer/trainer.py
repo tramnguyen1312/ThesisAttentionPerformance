@@ -172,7 +172,7 @@ class DatasetTrainer:
             train_acc = 100 * train_correct / train_total
 
             # Validate
-            val_loss, val_acc = self._validate_with_progress()
+            val_loss, val_acc = self._validate_with_progress(epoch, total_epochs)
 
             # Scheduler step nếu cần
             if self.scheduler and not isinstance(self.scheduler, OneCycleLR):
