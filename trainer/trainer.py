@@ -153,39 +153,39 @@ class DatasetTrainer:
             train_correct = 0
             train_total = 0
             self.model.train()
-            loop = tqdm.tqdm(self.train_loader, desc=f"Epoch [{epoch}/{total_epochs}] Training", leave=False, ncols=100)
-            for imgs, labels in loop:
+            for imgs, labels in self.train_loader:
                 imgs, labels = imgs.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad()
-                with torch.amp.autocast(device_type='cuda', enabled=self.use_amp):
-                    outputs = self.model(imgs)
-                    loss = self.criterion(outputs, labels)
-                if self.use_amp:
-                    self.scaler.scale(loss).backward()
-                    self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                else:
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                    self.optimizer.step()
-                if isinstance(self.scheduler, OneCycleLR):
-                    self.scheduler.step()
+                outputs = self.model(imgs)
+                loss = self.criterion(outputs, labels)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                self.optimizer.step()
+
                 train_loss += loss.item()
                 preds = outputs.argmax(dim=1)
                 train_correct += (preds == labels).sum().item()
                 train_total += labels.size(0)
-                loop.set_postfix(loss=train_loss / ((loop.n + 1)), acc=100 * train_correct / train_total)
+
+            # TÍNH LOSS TRUNG BÌNH
             train_loss_epoch = train_loss / len(self.train_loader)
             train_acc = 100 * train_correct / train_total
-            val_loss, val_acc = self._validate_with_progress(epoch, total_epochs)
+
+            # Validate
+            val_loss, val_acc = self._validate()
+
+            # Scheduler step nếu cần
             if self.scheduler and not isinstance(self.scheduler, OneCycleLR):
                 if isinstance(self.scheduler, ReduceLROnPlateau):
                     self.scheduler.step(val_loss)
                 else:
                     self.scheduler.step()
-            print(f"Epoch {epoch}: Train accuracy={train_acc:.2f}%, Train loss={train_loss_epoch}, Val accuracy={val_acc:.2f}%, Val loss={val_loss}")
+
+            # In ra cả loss và acc
+            print(f"Epoch {epoch}: "
+                  f"TrainLoss={train_loss_epoch:.4f}, TrainAcc={train_acc:.2f}%, "
+                  f"ValLoss={val_loss:.4f}, ValAcc={val_acc:.2f}%")
+
             if val_acc > best_acc:
                 best_acc = val_acc
                 torch.save({'epoch': epoch,
