@@ -1,58 +1,119 @@
-import argparse
-import os
-import random
-import numpy as np
 import torch
-import torch.backends.cudnn as cudnn
-
-from trainer import Trainer
+from torch.utils.data import Dataset, DataLoader
+import torch.nn as nn
+import torch.optim as optim
+import os
+import cv2
+import numpy as np
+from torchvision.transforms import Compose, Resize, ToTensor, Normalize, ToPILImage
+from sklearn.metrics import classification_report, accuracy_score
+from tqdm import tqdm
+from argparse import ArgumentParser
+from dataset import STL10Dataset
 from torchvision.models import vgg16
-from backbone import VGG16
+from transforms import *
+
+# from torch.utils.tensorboard import SummaryWriter
+
+
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+
+def get_args():
+    parser = ArgumentParser(description='train VGG19')
+    parser.add_argument('--root', '-r', type=str, default='data', help='root directory of dataset')
+    parser.add_argument('--epochs', '-e', type=int, default=40, help='number of epochs')
+    parser.add_argument('--batch_size', '-b', type=int, default=32, help='batch size')
+    parser.add_argument('--num_workers', '-n', type=int, default=4, help='number of workers')
+    parser.add_argument('--logging', '-l', type=str, default='logging', help='logging directory')
+    args = parser.parse_args()
+    return args
+
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='PyTorch CIFAR10/100/STL100 Training')
-    parser.add_argument('--dataset', default='stl10', type=str)
-    parser.add_argument('--data_dir', default='datasets/datasets', type=str)
-    parser.add_argument('--batch_size', default=128, type=int)
-    parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
-    parser.add_argument('--lr_decay', default=0.1, type=float, help='learning rate decay rate')
-    parser.add_argument('--optimizer', default='sgd', help='optimizer: sgd | adam')
-    parser.add_argument('--weight_decay', default=0.0005, type=float)
-    parser.add_argument('--momentum', default=0.9, type=float)
-    parser.add_argument('--epochs', default=300, type=int, metavar='N', help='number of total epochs to run')
-    parser.add_argument('--save', default='trained_nets',help='path to save trained nets')
-    parser.add_argument('--save_epoch', default=10, type=int, help='save every save_epochs')
-    parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
-    parser.add_argument('--rand_seed', default=0, type=int, help='seed for random num generator')
-    parser.add_argument('--resume_model', default='', help='resume model from checkpoint')
-    parser.add_argument('--resume_opt', default='', help='resume optimizer from checkpoint')
 
-    # model parameters
-    parser.add_argument('--model', '-m', default='vgg11')
-    parser.add_argument('--loss_name', '-l', default='crossentropy', help='loss functions: crossentropy | mse')
+    args = get_args()
+    root = args.root
+    epochs = args.epochs
+    batch_size = args.batch_size
+    num_workers = args.num_workers
+    logging = args.logging
 
-    # data parameters
-    parser.add_argument('--raw_data', action='store_true', default=False, help='do not normalize data')
-    parser.add_argument('--noaug', default=False, action='store_true', help='no data augmentation')
-    parser.add_argument('--label_corrupt_prob', type=float, default=0.0)
-    parser.add_argument('--trainloader', default='', help='path to the dataloader with random labels')
-    parser.add_argument('--testloader', default='', help='path to the testloader with random labels')
+    train_dataset = STL10Dataset(root=root, train=True, transform=train_transform)
+    train_dataloader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
+                                  drop_last=True)
+    test_dataset = STL10Dataset(root=root, train=False, transform=test_transform)
+    test_dataloader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+                                 drop_last=False)
 
-    parser.add_argument('--idx', default=0, type=int, help='the index for the repeated experiment')
-    args = parser.parse_args()
+    # writer = SummaryWriter(logging)
 
-    # Set random seeds
-    random.seed(args.rand_seed)
-    np.random.seed(args.rand_seed)
-    torch.manual_seed(args.rand_seed)
-    use_cuda = torch.cuda.is_available()
-    if use_cuda:
-        torch.cuda.manual_seed_all(args.rand_seed)
-        cudnn.benchmark = True
+    model = vgg16().to(device)
+    if os.path.exists('model/last.pt'):
+        model.load_state_dict(torch.load('model/last.pt', map_location=torch.device('cpu')))
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(model.parameters(), lr=1e-3, momentum=0.9)
 
-    # Define your model here (replace with your custom model if needed)
-    model = VGG16(num_classes=10)
+    best_acc = 0
+    best_model = vgg16().to(device)
+    if os.path.exists('model/best.pt'):
+        best_model.load_state_dict(torch.load('model/best.pt', map_location=torch.device('cpu')))
+        best_model.eval()
+        all_predictions_best = []
+        all_labels_best = []
+        for iter, (images, labels) in enumerate(test_dataloader):
+            images = images.to(device)
+            labels = labels.to(device)
 
-    # Run trainer
-    trainer = Trainer(args, model)
-    trainer.run()
+            with torch.no_grad():
+                outputs = best_model(images)
+                loss = criterion(outputs, labels)
+                predictions = torch.argmax(outputs.cpu(), dim=1)
+                all_predictions_best.extend(predictions)
+                all_labels_best.extend(labels.cpu())
+        all_labels_best = [label.item() for label in all_labels_best]
+        all_predictions_best = [prediction.item() for prediction in all_predictions_best]
+        best_acc = accuracy_score(all_labels_best, all_predictions_best)
+
+    print('fdghsfhgsdjkfhsdhfj')
+
+    for epoch in range(epochs):
+        model.train()
+        progress_bar = tqdm(train_dataloader)
+        for iter, (images, labels) in enumerate(progress_bar):
+            images = images.to(device)
+            labels = labels.to(device)
+
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            # writer.add_scalar('Train/Loss', loss, epoch*len(train_dataloader)+iter)
+            progress_bar.set_description(
+                'Epoch: {}/{} Iter: {} Loss: {:.4f}'.format(epoch + 1, epochs, iter + 1, loss.item()))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        model.eval()
+        all_predictions = []
+        all_labels = []
+        for iter, (images, labels) in enumerate(test_dataloader):
+            images = images.to(device)
+            labels = labels.to(device)
+
+            with torch.no_grad():
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                predictions = torch.argmax(outputs.cpu(), dim=1)
+                all_predictions.extend(predictions)
+                all_labels.extend(labels.cpu())
+        all_labels = [label.item() for label in all_labels]
+        all_predictions = [prediction.item() for prediction in all_predictions]
+        acc = accuracy_score(all_labels, all_predictions)
+        print('Epoch: {}/{} Test Loss: {:.4f} Test Acc: {:.4f}'.format(epoch + 1, epochs, loss.item(), acc))
+        torch.save(model.state_dict(), 'model/last.pt')
+        if acc > best_acc:
+            torch.save(model.state_dict(), 'model/best.pt')
+            best_acc = acc
+        # writer.add_scalars('Val/Accuracy', acc, epoch)
+
+
