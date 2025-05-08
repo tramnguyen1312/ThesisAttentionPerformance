@@ -8,10 +8,8 @@ class MnistDataLoader(BaseDataLoader):
     """
     def __init__(self, data_dir, batch_size, shuffle=True, validation_split=0.0, num_workers=1, training=True):
         trsfm = transforms.Compose([
-            transforms.Resize((224, 224)),
-            #transforms.CenterCrop(224),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize((0.1307,), (0.3081,))
         ])
         self.data_dir = data_dir
         #self.dataset = datasets.MNIST(self.data_dir, train=training, download=True, transform=trsfm)
