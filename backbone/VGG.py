@@ -28,7 +28,7 @@ class VGG16(torch.nn.Module):
         # classifier: replace last FC layer
         cls = list(backbone.classifier.children())
         in_features = cls[-1].in_features
-        cls[0] = nn.Linear(512 * 7 * 7, 4096)
+        #cls[0] = nn.Linear(512 * 7 * 7, 4096)
         cls[-1] = nn.Linear(in_features, num_classes)
         self.classifier = nn.Sequential(*cls)
 

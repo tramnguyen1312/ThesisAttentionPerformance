@@ -7,6 +7,7 @@ import torch.backends.cudnn as cudnn
 
 from trainer import Trainer
 from torchvision.models import vgg16
+from backbone import VGG16
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10/100/STL100 Training')
@@ -50,7 +51,7 @@ if __name__ == '__main__':
         cudnn.benchmark = True
 
     # Define your model here (replace with your custom model if needed)
-    model = vgg16(num_classes=10)  # Example: VGG11 for CIFAR10
+    model = VGG16(attn_type='cbam', num_heads=8, weights=None, num_classes=10)
 
     # Run trainer
     trainer = Trainer(args, model)

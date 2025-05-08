@@ -107,11 +107,24 @@ class Trainer:
         self.log_file.close()
 
     def _log(self, epoch, train_loss, train_err, test_err, test_loss):
-        status = f'e: {epoch} loss: {train_loss:.5f} train_err: {train_err:.3f} test_top1: {test_err:.3f} test_loss {test_loss:.5f}\n'
+        train_acc = 100 - train_err
+        test_acc = 100 - test_err
+        status = (
+            f"e: {epoch} "
+            f"loss: {train_loss:.5f} "
+            f"train_err: {train_err:.3f} "
+            f"train_acc: {train_acc:.3f} "
+            f"test_err: {test_err:.3f} "
+            f"test_acc: {test_acc:.3f} "
+            f"test_loss: {test_loss:.5f}\n"
+        )
         print(status)
         self.log_file.write(status)
 
     def _save_checkpoint(self, optimizer, epoch, acc):
-        state = {'acc': acc, 'epoch': epoch, 'state_dict': self.net.module.state_dict() if self.args.ngpu > 1 else self.net.state_dict()}
+        state = {'acc': acc, 'epoch': epoch,
+                 'state_dict': self.net.module.state_dict() if self.args.ngpu > 1 else self.net.state_dict()}
         opt_state = {'optimizer': optimizer.state_dict()}
-        path
+        path = os.path.join(self.args.save, self.save_folder)
+        torch.save(state, f"{path}/model_{epoch}.t7")
+        torch.save(opt_state, f"{path}/opt_state_{epoch}.t7")
