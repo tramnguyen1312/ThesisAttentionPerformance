@@ -21,11 +21,11 @@ class MHAStackedAttention(nn.Module):
                                          batch_first=True,
                                          bias=False)
         self.norm = nn.LayerNorm(channels)
-        if attn_type == 'cbam':
+        if attn_type == 'CBAM':
             self.attn2 = CBAMBlock(channel=channels, reduction=reduction_ratio, kernel_size=7)
-        elif attn_type == 'bam':
+        elif attn_type == 'BAM':
             self.attn2 = BAMBlock(channel=channels, reduction=reduction_ratio)
-        elif attn_type == 'scse':
+        elif attn_type == 'scSE':
             self.attn2 = scSEBlock(channel=channels, reduction_ratio=reduction_ratio)
         else:
             raise ValueError(f"Unknown attn_type: {attn_type}")
