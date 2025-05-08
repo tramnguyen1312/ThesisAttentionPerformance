@@ -1,120 +1,117 @@
-import numpy as np
+import os
 import torch
-from torchvision.utils import make_grid
-from base import BaseTrainer
-from utils import inf_loop, MetricTracker
-from tqdm import tqdm
+import torch.nn as nn
+import torch.nn.init as init
+import torch.optim as optim
 
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module='torchvision')
+def init_params(net):
+    for m in net.modules():
+        if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+            init.kaiming_normal_(m.weight, mode='fan_in')
+            if m.bias is not None:
+                init.constant_(m.bias, 0)
+        elif isinstance(m, nn.BatchNorm2d):
+            init.constant_(m.weight, 1)
+            init.constant_(m.bias, 0)
+        elif isinstance(m, nn.Linear):
+            init.normal_(m.weight, std=1e-3)
+            if m.bias is not None:
+                init.constant_(m.bias, 0)
 
-class Trainer(BaseTrainer):
-    """
-    Trainer class
-    """
-    def __init__(self, model, criterion, metric_ftns, optimizer, config, device,
-                 data_loader, valid_data_loader=None, lr_scheduler=None, len_epoch=None, view_images=False):
-        super().__init__(model, criterion, metric_ftns, optimizer, config)
-        self.config = config
-        self.device = device
-        self.data_loader = data_loader
-        if len_epoch is None:
-            # epoch-based training
-            self.len_epoch = len(self.data_loader)
-        else:
-            # iteration-based training
-            self.data_loader = inf_loop(data_loader)
-            self.len_epoch = len_epoch
-        self.valid_data_loader = valid_data_loader
-        self.do_validation = self.valid_data_loader is not None
-        self.lr_scheduler = lr_scheduler
-        self.log_step = int(np.sqrt(data_loader.batch_size))
+def train(trainloader, net, criterion, optimizer, use_cuda=True):
+    net.train()
+    train_loss, correct, total = 0, 0, 0
+    for inputs, targets in trainloader:
+        if use_cuda:
+            inputs, targets = inputs.cuda(), targets.cuda()
+        optimizer.zero_grad()
+        outputs = net(inputs)
+        loss = criterion(outputs, targets)
+        loss.backward()
+        optimizer.step()
+        train_loss += loss.item() * inputs.size(0)
+        _, predicted = outputs.max(1)
+        total += targets.size(0)
+        correct += predicted.eq(targets).sum().item()
+    return train_loss / total, 100 - 100. * correct / total
 
-        self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
-        self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
-        self.view_images = view_images
+def test(testloader, net, criterion, use_cuda=True):
+    net.eval()
+    test_loss, correct, total = 0, 0, 0
+    with torch.no_grad():
+        for inputs, targets in testloader:
+            if use_cuda:
+                inputs, targets = inputs.cuda(), targets.cuda()
+            outputs = net(inputs)
+            loss = criterion(outputs, targets)
+            test_loss += loss.item() * inputs.size(0)
+            _, predicted = outputs.max(1)
+            total += targets.size(0)
+            correct += predicted.eq(targets).sum().item()
+    return test_loss / total, 100 - 100. * correct / total
 
-    def _train_epoch(self, epoch):
-        """
-        Training logic for an epoch
+def name_save_folder(args):
+    folder = f"{args.dataset}_{args.optimizer}_lr={args.lr}_bs={args.batch_size}_wd={args.weight_decay}"
+    return folder
 
-        :param epoch: Integer, current training epoch.
-        :return: A log that contains average loss and metric in this epoch.
-        """
-        self.model.train()
-        self.train_metrics.reset()
-        #for batch_idx, (data, target) in enumerate(self.data_loader):
-        for batch_idx, (data, target) in enumerate(
-                    tqdm(self.data_loader, total=self.len_epoch, desc=f"Training Epoch {epoch}")):
-            data, target = data.to(self.device), target.to(self.device)
+class Trainer:
+    def __init__(self, args, model):
+        self.args = args
+        self.net = model
+        self.use_cuda = torch.cuda.is_available()
+        self.lr = args.lr
+        self.start_epoch = 1
+        self.best_acc = 0.0
+        self.save_folder = name_save_folder(args)
+        os.makedirs(os.path.join(args.save, self.save_folder), exist_ok=True)
+        self.log_file = open(os.path.join(args.save, self.save_folder, 'log.out'), 'a')
 
-            self.optimizer.zero_grad()
-            output = self.model(data)
-            loss = self.criterion(output, target)
-            loss.backward()
-            self.optimizer.step()
+    def run(self):
+        from dataloader import get_data_loaders  # Import here to avoid circular import
+        trainloader, testloader = get_data_loaders(self.args)
+        init_params(self.net)
 
-            self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
-            self.train_metrics.update('loss', loss.item())
-            for met in self.metric_ftns:
-                self.train_metrics.update(met.__name__, met(output, target))
+        if self.args.ngpu > 1:
+            self.net = nn.DataParallel(self.net)
+        if self.use_cuda:
+            self.net.cuda()
 
-            if batch_idx % self.log_step == 0:
-                # self.logger.debug('Train Epoch: {} {} Loss: {:.6f}'.format(
-                #     epoch,
-                #     self._progress(batch_idx),
-                #     loss.item()))
-                if self.view_images:
-                    self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+        criterion = nn.CrossEntropyLoss() if self.args.loss_name == 'crossentropy' else nn.MSELoss()
+        if self.use_cuda:
+            criterion.cuda()
 
-            if batch_idx == self.len_epoch:
-                break
-        log = self.train_metrics.result()
+        optimizer = optim.SGD(self.net.parameters(), lr=self.lr, momentum=self.args.momentum, weight_decay=self.args.weight_decay, nesterov=True) \
+            if self.args.optimizer == 'sgd' else optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=self.args.weight_decay)
 
-        if self.do_validation:
-            val_log = self._valid_epoch(epoch)
-            log.update(**{'val_'+k : v for k, v in val_log.items()})
+        # Initial evaluation
+        train_loss, train_err = test(trainloader, self.net, criterion, self.use_cuda)
+        test_loss, test_err = test(testloader, self.net, criterion, self.use_cuda)
+        self._log(0, train_loss, train_err, test_err, test_loss)
 
-        if self.lr_scheduler is not None:
-            self.lr_scheduler.step()
-        return log
+        # Main loop
+        for epoch in range(1, self.args.epochs + 1):
+            loss, train_err = train(trainloader, self.net, criterion, optimizer, self.use_cuda)
+            test_loss, test_err = test(testloader, self.net, criterion, self.use_cuda)
+            self._log(epoch, loss, train_err, test_err, test_loss)
 
-    def _valid_epoch(self, epoch):
-        """
-        Validate after training an epoch
+            acc = 100 - test_err
+            if epoch % self.args.save_epoch == 0 or acc > self.best_acc:
+                self.best_acc = max(acc, self.best_acc)
+                self._save_checkpoint(optimizer, epoch, acc)
 
-        :param epoch: Integer, current training epoch.
-        :return: A log that contains information about validation
-        """
-        self.model.eval()
-        self.valid_metrics.reset()
-        with torch.no_grad():
-            #for batch_idx, (data, target) in enumerate(self.valid_data_loader):
-            for batch_idx, (data, target) in enumerate(
-                        tqdm(self.valid_data_loader, desc=f"Validating Epoch {epoch}")):
-                data, target = data.to(self.device), target.to(self.device)
+            if epoch in [150, 225, 275]:
+                self.lr *= self.args.lr_decay
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = self.lr
 
-                output = self.model(data)
-                loss = self.criterion(output, target)
+        self.log_file.close()
 
-                self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                self.valid_metrics.update('loss', loss.item())
-                for met in self.metric_ftns:
-                    self.valid_metrics.update(met.__name__, met(output, target))
-                if self.view_images:  # chỉ thêm hình khi bật option
-                    self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+    def _log(self, epoch, train_loss, train_err, test_err, test_loss):
+        status = f'e: {epoch} loss: {train_loss:.5f} train_err: {train_err:.3f} test_top1: {test_err:.3f} test_loss {test_loss:.5f}\n'
+        print(status)
+        self.log_file.write(status)
 
-        # add histogram of model parameters to the tensorboard
-        for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins='auto')
-        return self.valid_metrics.result()
-
-    def _progress(self, batch_idx):
-        base = '[{}/{} ({:.0f}%)]'
-        if hasattr(self.data_loader, 'n_samples'):
-            current = batch_idx * self.data_loader.batch_size
-            total = self.data_loader.n_samples
-        else:
-            current = batch_idx
-            total = self.len_epoch
-        return base.format(current, total, 100.0 * current / total)
+    def _save_checkpoint(self, optimizer, epoch, acc):
+        state = {'acc': acc, 'epoch': epoch, 'state_dict': self.net.module.state_dict() if self.args.ngpu > 1 else self.net.state_dict()}
+        opt_state = {'optimizer': optimizer.state_dict()}
+        path
