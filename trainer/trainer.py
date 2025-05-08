@@ -18,6 +18,7 @@ import numpy as np
 import csv
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
+import tqdm
 
 class CosineWarmupScheduler(torch.optim.lr_scheduler._LRScheduler):
     def __init__(self, optimizer, warmup_epochs, max_epochs, min_lr=0, last_epoch=-1):
@@ -146,13 +147,17 @@ class DatasetTrainer:
 
     def train(self):
         best_acc = 0.0
-        for epoch in range(self.start_epoch, self.configs.get('max_epochs',100)+1):
-            train_loss, train_correct, train_total = 0,0,0
+        total_epochs = self.configs.get('max_epochs', 100)
+        for epoch in range(self.start_epoch, total_epochs + 1):
+            train_loss = 0.0
+            train_correct = 0
+            train_total = 0
             self.model.train()
-            for imgs, labels in self.train_loader:
+            loop = tqdm.tqdm(self.train_loader, desc=f"Epoch [{epoch}/{total_epochs}] Training", leave=False)
+            for imgs, labels in loop:
                 imgs, labels = imgs.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad()
-                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                with torch.amp.autocast(device_type='cuda', enabled=self.use_amp):
                     outputs = self.model(imgs)
                     loss = self.criterion(outputs, labels)
                 if self.use_amp:
@@ -169,16 +174,17 @@ class DatasetTrainer:
                     self.scheduler.step()
                 train_loss += loss.item()
                 preds = outputs.argmax(dim=1)
-                train_correct += (preds==labels).sum().item()
+                train_correct += (preds == labels).sum().item()
                 train_total += labels.size(0)
+                loop.set_postfix(loss=train_loss / ((loop.n + 1)), acc=100 * train_correct / train_total)
             train_acc = 100 * train_correct / train_total
-            val_loss, val_acc = self._validate()
+            val_loss, val_acc = self._validate_with_progress(epoch, total_epochs)
             if self.scheduler and not isinstance(self.scheduler, OneCycleLR):
                 if isinstance(self.scheduler, ReduceLROnPlateau):
                     self.scheduler.step(val_loss)
                 else:
                     self.scheduler.step()
-            print(f"Epoch {epoch}: TrainAcc={train_acc:.2f}, ValAcc={val_acc:.2f}")
+            print(f"Epoch {epoch}: TrainAcc={train_acc:.2f}%, ValAcc={val_acc:.2f}%")
             if val_acc > best_acc:
                 best_acc = val_acc
                 torch.save({'epoch': epoch,
@@ -191,22 +197,26 @@ class DatasetTrainer:
             if self.early_stopper.early_stop:
                 print("Early stopping")
                 break
-        print(f"Best ValAcc={best_acc:.2f}")
+        print(f"Best ValAcc={best_acc:.2f}%")
 
-    def _validate(self):
+    def _validate_with_progress(self, epoch, total_epochs):
         self.model.eval()
-        loss_sum, correct, total = 0,0,0
+        val_loss = 0.0
+        correct = 0
+        total = 0
+        loop = tqdm.tqdm(self.val_loader, desc=f"Epoch [{epoch}/{total_epochs}] Validation", leave=False)
         with torch.no_grad():
-            for imgs, labels in self.val_loader:
+            for imgs, labels in loop:
                 imgs, labels = imgs.to(self.device), labels.to(self.device)
-                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                with torch.amp.autocast(device_type='cuda', enabled=self.use_amp):
                     outputs = self.model(imgs)
                     loss = self.criterion(outputs, labels)
-                loss_sum += loss.item()
+                val_loss += loss.item()
                 preds = outputs.argmax(dim=1)
-                correct += (preds==labels).sum().item()
+                correct += (preds == labels).sum().item()
                 total += labels.size(0)
-        return loss_sum/len(self.val_loader), 100*correct/total
+                loop.set_postfix(loss=val_loss / ((loop.n + 1)), acc=100 * correct / total)
+        return val_loss / len(self.val_loader), 100 * correct / total
 
     def test(self):
         """Evaluate and save confusion matrix CSV."""
@@ -219,32 +229,26 @@ class DatasetTrainer:
                 preds = outputs.argmax(dim=1).cpu()
                 all_preds.extend(preds.tolist())
                 all_labels.extend(labels.tolist())
-        acc = 100 * sum(p==l for p, l in zip(all_preds, all_labels)) / len(all_labels)
+        acc = 100 * sum(p == l for p, l in zip(all_preds, all_labels)) / len(all_labels)
         print(f"Test Accuracy: {acc:.2f}%")
-        # compute and save confusion matrix
         cm = confusion_matrix(all_labels, all_preds)
         csv_path = self.configs.get('confusion_csv_path', 'confusion_matrix.csv')
-        # save as CSV
         with open(csv_path, mode='w', newline='') as f:
             writer = csv.writer(f)
-            # header: class indices
             writer.writerow([''] + [str(i) for i in range(cm.shape[1])])
             for i, row in enumerate(cm):
                 writer.writerow([str(i)] + row.tolist())
         print(f"Confusion matrix saved to {csv_path}")
         return acc
 
-# separate plotting function
-def plot_confusion_from_csv(csv_path, class_names=None):
-    """Load confusion matrix from CSV and plot."""
-    cm = np.loadtxt(csv_path, delimiter=',', dtype=int, skiprows=1, usecols=range(1, None))
-    if class_names is not None:
-        labels = class_names
-    else:
-        labels = [str(i) for i in range(cm.shape[0])]
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
-    disp.plot(cmap=plt.cm.Blues)
-    plt.title('Confusion Matrix')
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.show()
+    # separate plotting function
+    def plot_confusion_from_csv(csv_path, class_names=None):
+        """Load confusion matrix from CSV and plot."""
+        cm = np.loadtxt(csv_path, delimiter=',', dtype=int, skiprows=1, usecols=range(1, None))
+        labels = class_names if class_names else [str(i) for i in range(cm.shape[0])]
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+        disp.plot(cmap=plt.cm.Blues)
+        plt.title('Confusion Matrix')
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.show()
