@@ -15,23 +15,26 @@ import wandb  # Import wandb for logging
 import csv
 
 class EarlyStopping:
-    def __init__(self, patience=7, delta=0):
+    """
+    Early stops training when validation accuracy doesn't improve after a given patience.
+    """
+    def __init__(self, patience=7, delta=0.0):
         self.patience = patience
-        self.counter = 0
-        self.best_loss = None
-        self.early_stop = False
         self.delta = delta
+        self.best_acc = None
+        self.counter = 0
+        self.early_stop = False
 
-    def __call__(self, val_loss):
-        if self.best_loss is None:
-            self.best_loss = val_loss
-        elif val_loss > self.best_loss - self.delta:
+    def __call__(self, val_acc):
+        if self.best_acc is None:
+            self.best_acc = val_acc
+        elif val_acc <= self.best_acc + self.delta:
             self.counter += 1
-            print(f"EarlyStopping counter: {self.counter}/{self.patience}")
+            print(f"EarlyStoppingAccuracy counter: {self.counter}/{self.patience}")
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
-            self.best_loss = val_loss
+            self.best_acc = val_acc
             self.counter = 0
 class Trainer:
     """Base trainer class."""
@@ -283,7 +286,7 @@ class DatasetTrainer(Trainer):
                 self.best_val_acc = val_acc
                 torch.save(self.model.state_dict(), self.checkpoint_path)
                 print(f"New best model saved with accuracy: {val_acc:.2f}%")
-            early_stopper(val_loss)
+            early_stopper(val_acc)
             if early_stopper.early_stop:
                 print("Early stopping triggered!")
                 break
