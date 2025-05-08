@@ -1,5 +1,1 @@
-from .trainer import DatasetTrainer
-
-__all__ = [
-    "DatasetTrainer",
-]
+from .trainer import *
