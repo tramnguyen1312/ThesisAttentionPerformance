@@ -13,7 +13,7 @@ class VGG16(torch.nn.Module):
         feats = backbone.features
         # up to pool4
         self.features1 = nn.Sequential(*feats[:24])
-        # C4 = 512
+        C4 = 512
         # self.mha_block = MHAStackedAttention(
         #     channels=C4,
         #     num_heads=num_heads,
@@ -33,7 +33,7 @@ class VGG16(torch.nn.Module):
 
     def forward(self, x):
         x = self.features1(x)
-        #x = self.mha_block(x)
+        # x = self.mha_block(x)
         x = self.features2(x)
         x = torch.flatten(x, 1)
         return self.classifier(x)
@@ -42,7 +42,7 @@ class VGG16(torch.nn.Module):
 
 if __name__ == '__main__':
     model_v = VGG16(attn_type='cbam', num_heads=8, weights=None, num_classes=10)
-    inp = torch.randn(2, 3, 224, 224)
+    inp = torch.randn(128, 3, 224, 224)
     out_r = model_v(inp)
     print(model_v)  # e.g. [2, 1000] each
     print(out_r)
