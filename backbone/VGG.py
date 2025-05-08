@@ -13,12 +13,12 @@ class VGG16(torch.nn.Module):
         feats = backbone.features
         # up to pool4
         self.features1 = nn.Sequential(*feats[:24])
-        C4 = 512
-        self.mha_block = MHAStackedAttention(
-            channels=C4,
-            num_heads=num_heads,
-            attn_type=attn_type
-        )
+        # C4 = 512
+        # self.mha_block = MHAStackedAttention(
+        #     channels=C4,
+        #     num_heads=num_heads,
+        #     attn_type=attn_type
+        # )
         # # conv5_x + pool5
         # self.features2 = nn.Sequential(*feats[24:])
         # self.classifier = backbone.classifier
@@ -33,7 +33,7 @@ class VGG16(torch.nn.Module):
 
     def forward(self, x):
         x = self.features1(x)
-        x = self.mha_block(x)
+        #x = self.mha_block(x)
         x = self.features2(x)
         x = torch.flatten(x, 1)
         return self.classifier(x)
