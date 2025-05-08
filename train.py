@@ -121,11 +121,11 @@ def main():
         attention_module = None
 
      # Select backbone model
-    model = vgg16()
-    # if args.backbone == "VGG16":
-    #     model = VGG16(pretrained=args.pre_train, attention=attention_module, num_classes=train_dataset.num_classes)
-    # elif args.backbone == "ResNet18":
-    #     model = ResNet18(pretrained=args.pre_train, attention=attention_module, num_classes=train_dataset.num_classes)
+    model = None
+    if args.backbone == "VGG16":
+        model = VGG16(attn_type='cbam', num_heads=8, weights=None, num_classes=10)
+    elif args.backbone == "ResNet18":
+        model = ResNet18(pretrained=args.pre_train, attention=attention_module, num_classes=train_dataset.num_classes)
 
         # Training configurations
     configs = {
