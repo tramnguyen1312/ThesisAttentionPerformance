@@ -153,7 +153,7 @@ class DatasetTrainer:
             train_correct = 0
             train_total = 0
             self.model.train()
-            loop = tqdm.tqdm(self.train_loader, desc=f"Epoch [{epoch}/{total_epochs}] Training", leave=False, ncols=120)
+            loop = tqdm.tqdm(self.train_loader, desc=f"Epoch [{epoch}/{total_epochs}] Training", leave=False, ncols=100)
             for imgs, labels in loop:
                 imgs, labels = imgs.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad()
@@ -177,6 +177,7 @@ class DatasetTrainer:
                 train_correct += (preds == labels).sum().item()
                 train_total += labels.size(0)
                 loop.set_postfix(loss=train_loss / ((loop.n + 1)), acc=100 * train_correct / train_total)
+            train_loss_epoch = train_loss / len(self.train_loader)
             train_acc = 100 * train_correct / train_total
             val_loss, val_acc = self._validate_with_progress(epoch, total_epochs)
             if self.scheduler and not isinstance(self.scheduler, OneCycleLR):
@@ -184,7 +185,7 @@ class DatasetTrainer:
                     self.scheduler.step(val_loss)
                 else:
                     self.scheduler.step()
-            print(f"Epoch {epoch}: Train accuracy={train_acc:.2f}%, Train loss={train_loss}, Val accuracy={val_acc:.2f}%, Val loss={val_loss}")
+            print(f"Epoch {epoch}: Train accuracy={train_acc:.2f}%, Train loss={train_loss_epoch}, Val accuracy={val_acc:.2f}%, Val loss={val_loss}")
             if val_acc > best_acc:
                 best_acc = val_acc
                 torch.save({'epoch': epoch,
@@ -204,7 +205,7 @@ class DatasetTrainer:
         val_loss = 0.0
         correct = 0
         total = 0
-        loop = tqdm.tqdm(self.val_loader, desc=f"Epoch [{epoch}/{total_epochs}] Validation", leave=False, ncols=120)
+        loop = tqdm.tqdm(self.val_loader, desc=f"Epoch [{epoch}/{total_epochs}] Validation", leave=False, ncols=100)
         with torch.no_grad():
             for imgs, labels in loop:
                 imgs, labels = imgs.to(self.device), labels.to(self.device)
