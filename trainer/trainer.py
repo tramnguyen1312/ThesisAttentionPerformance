@@ -8,11 +8,13 @@ from torch.optim.lr_scheduler import (
     StepLR,
     CosineAnnealingLR,
     CosineAnnealingWarmRestarts,
+LambdaLR
 )
 import tqdm
 from torch.utils.data import DataLoader
 import wandb  # Import wandb for logging
 import csv
+import math
 
 class EarlyStopping:
     """
@@ -108,29 +110,72 @@ class DatasetTrainer(Trainer):
             ])
 
     def _initialize_optimizer(self):
-        """Set up the optimizer."""
+        # phân nhóm tham số
+        mha_params, backbone_params, no_decay = [], [], []
+        for n, p in self.model.named_parameters():
+            if not p.requires_grad:
+                continue
+            if 'mha_block' in n or 'attn2' in n:
+                mha_params.append(p)
+            elif p.ndim == 1 or n.endswith('.bias') or 'norm' in n.lower():
+                no_decay.append(p)
+            else:
+                backbone_params.append(p)
+
+        groups = [
+            {'params': backbone_params, 'lr': self.learning_rate},
+            {'params': mha_params, 'lr': self.learning_rate * 0.1},
+            {'params': no_decay, 'weight_decay': 0.0}
+        ]
+        if self.optimizer_choice == "SGD":
+            return torch.optim.SGD(groups,
+                                   lr=self.learning_rate,
+                                   momentum=0.9,
+                                   weight_decay=self.weight_decay)
+        elif self.optimizer_choice == "AdamW":
+            return torch.optim.AdamW(groups,
+                                     lr=self.learning_rate,
+                                     weight_decay=self.weight_decay)
         if self.optimizer_choice == "Adam":
             return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        elif self.optimizer_choice == "SGD":
-            return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.9,
-                                   weight_decay=self.weight_decay)
         elif self.optimizer_choice == "RAdam":
             return torch.optim.RAdam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        elif self.optimizer_choice == "AdamW":
-            return torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate,betas=(0.9, 0.999), eps=1e-8, weight_decay=self.weight_decay)
         else:
-            raise ValueError(f"Unsupported optimizer: {self.optimizer_choice}.")
+            print("No learning rate scheduler selected.")
+            return None
+
+
+
 
     def _initialize_scheduler(self):
-        """Set up the learning rate scheduler."""
-        if self.scheduler_choice == "ReduceLROnPlateau":
-            return ReduceLROnPlateau(self.optimizer, patience=5, factor=0.1, min_lr=self.min_lr, verbose=True)
-        elif self.scheduler_choice == "StepLR":
+        sched = self.scheduler_choice
+        if sched == "CosineWarmup":
+            warmup = self.configs.get("warmup_epochs", 10)
+            max_ep = self.max_epochs
+            min_lr = self.min_lr
+
+            def lr_lambda(epoch):
+                # linear warm-up
+                if epoch < warmup:
+                    return float(epoch + 1) / warmup
+                # cosine decay to min_lr/base_lr
+                progress = (epoch - warmup) / (max_ep - warmup)
+                return min_lr + 0.5 * (1 - min_lr) * (1 + math.cos(math.pi * progress))
+
+            return LambdaLR(self.optimizer, lr_lambda)
+        elif sched == "ReduceLROnPlateau":
+            return ReduceLROnPlateau(self.optimizer, patience=5,
+                                     factor=0.1, min_lr=self.min_lr, verbose=True)
+        elif sched == "StepLR":
             return StepLR(self.optimizer, step_size=10, gamma=0.1)
-        elif self.scheduler_choice == "CosineAnnealingLR":
-            return CosineAnnealingLR(self.optimizer, T_max=10, eta_min=self.min_lr, verbose=True)
-        elif self.scheduler_choice == "CosineAnnealingWarmRestarts":
-            return CosineAnnealingWarmRestarts(self.optimizer, T_0=10, T_mult=2, eta_min=self.min_lr, verbose=True)
+        elif sched == "CosineAnnealingLR":
+            return CosineAnnealingLR(self.optimizer, T_max=10,
+                                     eta_min=self.min_lr, verbose=True)
+        elif sched == "CosineAnnealingWarmRestarts":
+            return CosineAnnealingWarmRestarts(
+                self.optimizer, T_0=10, T_mult=2,
+                eta_min=self.min_lr, verbose=True
+            )
         else:
             print("No learning rate scheduler selected.")
             return None
@@ -167,6 +212,7 @@ class DatasetTrainer(Trainer):
             # Backward pass and optimization
             self.optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             self.optimizer.step()
 
             # Track metrics

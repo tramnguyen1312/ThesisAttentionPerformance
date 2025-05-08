@@ -30,6 +30,7 @@ class GLSABlock(nn.Module):
         else:
             raise ValueError(f"Unknown attn_type: {attn_type}")
         self.bn_out = nn.BatchNorm2d(channels)
+        self.gamma = nn.Parameter(torch.zeros(1))
 
     def forward(self, x):
         B, C, H, W = x.shape
@@ -43,5 +44,6 @@ class GLSABlock(nn.Module):
         attn_out = attn_out.permute(0, 2, 1).view(B, C, H, W)
         f1 = x + attn_out
         f2 = self.attn2(f1)
-        out = self.bn_out(f2)
+        #out = self.bn_out(f2)
+        out = x + self.gamma * f2
         return out
