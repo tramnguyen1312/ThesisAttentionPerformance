@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.datasets import STL10
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+from PIL import Image
 
 class STL10Dataset(Dataset):
     def __init__(self, root, train=True, transform=None, download=True):
@@ -16,6 +17,8 @@ class STL10Dataset(Dataset):
 
     def __getitem__(self, idx):
         image, label = self.dataset[idx]
+        if not isinstance(image, Image.Image):
+            image = Image.fromarray(image)
         if self.transform:
             image = self.transform(image)
         return image, label
