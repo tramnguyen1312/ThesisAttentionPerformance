@@ -16,6 +16,7 @@ def get_data_loaders(args):
     normalize = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
                                      std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
     transform_test = transforms.Compose([
+        transforms.Resize(224),
         transforms.ToTensor(),
         normalize,
     ])
