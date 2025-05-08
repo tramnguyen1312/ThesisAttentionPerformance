@@ -125,26 +125,33 @@ class GeneralDataset:
         #     ])
         # else:
         #     self.transform = common_transform
-        common_transform = transforms.Compose([
-            transforms.Resize((image_size + 32, image_size + 32)),
-            transforms.CenterCrop(image_size),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-
         if self.data_type == "train":
             self.transform = transforms.Compose([
-                transforms.RandomResizedCrop(self.image_size, scale=(0.7, 1.0)),
+                transforms.RandomResizedCrop(image_size, scale=(0.7, 1.0)),
                 transforms.RandomHorizontalFlip(p=0.5),
-                transforms.RandomRotation(degrees=15),
-                transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
-                transforms.RandomPerspective(distortion_scale=0.3, p=0.3),
-                transforms.GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 1.5)),
+                transforms.RandomRotation(10),  # slightly smaller angle
+                transforms.ColorJitter(0.3, 0.3, 0.2, 0.1),
+                transforms.RandomPerspective(distortion_scale=0.2, p=0.2),
+                transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0)),
+                transforms.RandAugment(num_ops=2, magnitude=9),  # adds AutoAugment-like ops
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]
+                ),
+                transforms.RandomErasing(p=0.2, scale=(0.02, 0.2), ratio=(0.3, 3.3))
             ])
         else:
-            self.transform = common_transform
+            self.transform = transforms.Compose([
+                transforms.Resize(image_size + 32),
+                transforms.CenterCrop(image_size),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]
+                )
+            ])
+
 
         # Load entire dataset
         self.full_dataset = self._load_dataset()
