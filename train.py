@@ -105,29 +105,12 @@ def main():
         shuffle=False,
         num_workers=args.num_workers
     )
-    if args.backbone == "VGG16":
-        backbone_channels = 512
-    elif args.backbone == "ResNet18":
-        backbone_channels = 256
-    attention_module = None
-    # Select attention mechanism  
-    if args.attention == "CBAM":
-        attention_module = CBAMBlock(channel=backbone_channels, reduction=16, kernel_size=7)
-    elif args.attention == "BAM":
-        attention_module = BAMBlock(channel=backbone_channels, reduction=16, dia_val=2)
-    elif args.attention == "scSE":
-        attention_module = scSEBlock(channel=backbone_channels)
-    elif args.attention == "none":
-        attention_module = None
-
      # Select backbone model
     model = None
     if args.backbone == "VGG16":
-        model = VGG16(attn_type=args.attention, num_heads=8, weights=None, num_classes=train_dataset.num_classes)
+        model = VGG16(pretrained=args.pre_train, attn_type=args.attention, num_heads=8, num_classes=train_dataset.num_classes)
     elif args.backbone == "ResNet18":
-        model = ResNet18(pretrained=args.pre_train, attention=attention_module, num_classes=train_dataset.num_classes)
-
-        # Training configurations
+        model = ResNet18(pretrained=args.pre_train, attn_type=args.attention, num_heads=8, num_classes=train_dataset.num_classes)
     configs = {
         "device": device,
         "batch_size": args.batch_size,
@@ -147,7 +130,6 @@ def main():
         print(model)
         # Initialize trainer
         trainer = DatasetTrainer(model, train_loader, test_loader, test_loader, configs, wb=True)
-
         # Start training
         trainer.train()
     else:

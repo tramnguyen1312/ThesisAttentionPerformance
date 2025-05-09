@@ -3,13 +3,13 @@ import torch.nn as nn
 from pytorchcv.model_provider import get_model as ptcv_get_model
 # from attention.hybird.HMHA_CBAM import HMHA_CBAM
 import torch.nn.functional as F
-from torchvision.models import resnet50, vgg16
+from torchvision.models import vgg16, VGG16_Weights
 from attention import GLSABlock
 
 class VGG16(torch.nn.Module):
-    def __init__(self, attn_type='cbam', num_heads=8, weights=None, num_classes=1000):
+    def __init__(self, attn_type='cbam', num_heads=8, pretrained=None, num_classes=1000):
         super().__init__()
-        backbone = vgg16(weights=weights)
+        backbone = vgg16(weights=VGG16_Weights.IMAGENET1K_V1 if pretrained else None)
         feats = backbone.features
         # up to pool4
         self.features1 = nn.Sequential(*feats[:24])

@@ -40,7 +40,6 @@ class EarlyStopping:
             self.counter = 0
 class Trainer:
     """Base trainer class."""
-
     def __init__(self):
         pass
 

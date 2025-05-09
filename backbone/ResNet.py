@@ -1,136 +1,44 @@
-from pytorchcv.model_provider import get_model as ptcv_get_model
 import torch
+from torchvision.models import resnet18, ResNet18_Weights
 import torch.nn as nn
+from torchvision.models import resnet50, vgg16
+from attention import GLSABlock
 
-
-class ResNet18(torch.nn.Module):
-    def __init__(self, pretrained=False, attention=None, num_classes=10):
-        """
-        ResNet50 model with optional attention mechanism at the initial convolution block.
-
-        Args:
-            pretrained (bool): Whether to load pretrained weights for ResNet50.
-            attention (nn.Module, optional): An attention module to add to the
-                initial block. If None, no attention module is applied.
-        """
+class ResNet18(nn.Module):
+    def __init__(self, attn_type='CBAM', num_heads=8, pretrained=True, num_classes=1000):
         super().__init__()
-        self.resnet = ptcv_get_model("resnet18", pretrained=pretrained)  # Load ResNet50 backbone
-        # Remove Max-Pooling from the initial stage
-        #self.resnet.features.init_block.pool = nn.Identity()  # Remove MaxPool2d
-        # #
-        # # Modify stride in res2 and res3 stages to retain more spatial information
-        # self.resnet.features.init_block.conv = nn.Conv2d(
-        #     in_channels=3,
-        #     out_channels=64,
-        #     kernel_size=3,
-        #     stride=1,
-        #     padding=1,
-        #     bias=False,
-        # )
-
-        # Check if attention module is provided
-        if isinstance(attention, nn.Module):
-            self.attention_module = attention
-            #self._replace_init_block_with_attention()
-            self._insert_attention_after_block4()
-        else:
-            self.attention_module = None  # No attention by default
-
-        # self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
-        # GAP and Max Pooling
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        #self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
-
-        self.classifier = nn.Sequential(
-            nn.Linear(512, 512),  # ResNet18 outputs 512 channels
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.4),  # Optional dropout
-            nn.Linear(512, num_classes)  # Final classification layer
+        backbone = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1 if pretrained else None)
+        self.stem = nn.Sequential(
+            backbone.conv1, backbone.bn1, backbone.relu, backbone.maxpool,
+            backbone.layer1, backbone.layer2, backbone.layer3
         )
+        C3 = backbone.layer3[-1].conv2.out_channels
+        self.attn_type = attn_type
 
-    def _replace_init_block_with_attention(self):
-        """
-        Replace the initial convolution block in ResNet50 with
-        a sequential module that applies the attention module first.
-        """
-        original_conv_block = self.resnet.features.init_block.conv  # Original convolution
-        self.resnet.features.init_block.conv = nn.Sequential(
-            self.attention_module,  # Insert the attention module
-            original_conv_block  # Follow with the original convolution
-        )
+        if self.attn_type != 'none':
+            self.mha_block = GLSABlock(
+                channels=C3,
+                num_heads=num_heads,
+                attn_type=attn_type
+            )
 
-    def _insert_attention_after_block4(self):
-        """
-        Inserts the attention mechanism after block 4 and before block 5.
-        """
-        # Split blocks into before, attention, and after
-        res4 = self.resnet.features[3]  # res4
-        res5 = self.resnet.features[4]  # res5
-        # Replace block list with attention sandwiched between
-        self.resnet.features[3] = nn.Sequential(
-            res4,  # Original block 4
-            self.attention_module  # Insert attention here
-        )
-        self.resnet.features[4] = res5  # Retain block 5
-
-    def _insert_attention_after_block5(self):
-        """
-        Inserts the attention mechanism after block 5 and before the final pooling.
-        """
-        # Access the fifth block and the original output
-        res5 = self.resnet.features[4]  # Get block 5
-        # Assemble a Sequential container that includes block 5 and the attention module
-        self.resnet.features[4] = nn.Sequential(
-            res5,  # The original block 5
-            self.attention_module  # Insert attention here
-        )
+        # phần còn lại
+        self.layer4 = backbone.layer4
+        self.avgpool = backbone.avgpool
+        self.fc = nn.Linear(backbone.fc.in_features, num_classes)
 
     def forward(self, x):
-        """
-        Forward pass through the model.
-
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, channels, height, width).
-
-        Returns:
-            torch.Tensor: Model output.
-        """
-        x = self.resnet.features(x)  # Pass through the feature extractor
-        x = self.global_avg_pool(x)  # GAP
+        x = self.stem(x)
+        if self.attn_type != 'none':
+            x = self.mha_block(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
         x = torch.flatten(x, 1)
-        x = self.classifier(x)  # Pass through the redefined Fully Connected layers
-        return x
-
+        return self.fc(x)
 
 if __name__ == '__main__':
-    from attention.CBAM import CBAMBlock
-    from attention.BAM import BAMBlock
-    from attention.scSE import scSEBlock
-
-    # Initialize models with different attention mechanisms
-    cbam_module = CBAMBlock(channel=256, reduction=16, kernel_size=7)
-    model_cbam = ResNet18(pretrained=False, attention=cbam_module)
-
-    bam_module = BAMBlock(channel=256, reduction=16, dia_val=2)
-    model_bam = ResNet18(pretrained=False, attention=bam_module)
-
-    scse_module = scSEBlock(channel=256)
-    model_scse = ResNet18(pretrained=False, attention=scse_module)
-
-    # Test input tensor
-    x = torch.randn(32, 3, 224, 224)
-
-    # Test models
-    outputs_cbam = model_cbam(x)
-    print("CBAM Output Shape:", outputs_cbam.shape)
-
-    outputs_bam = model_bam(x)
-    print("BAM Output Shape:", outputs_bam.shape)
-
-    outputs_scse = model_scse(x)
-    print("scSE Output Shape:", outputs_scse.shape)
-
-    # Test model without attention
-    model_no_attention = ResNet18(pretrained=False)
-    outputs_no_attention = model_no_attention(x)
-    print("No Attention Output Shape:", outputs_no_attention.shape)
+    model_v = ResNet18(attn_type='CBAM', num_heads=8, pretrained=False, num_classes=10)
+    inp = torch.randn(128, 3, 224, 224)
+    out_r = model_v(inp)
+    print(model_v)
+    print(out_r)
