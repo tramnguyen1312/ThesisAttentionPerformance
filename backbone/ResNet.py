@@ -21,8 +21,6 @@ class ResNet18(nn.Module):
                 num_heads=num_heads,
                 attn_type=attn_type
             )
-
-        # phần còn lại
         self.layer4 = backbone.layer4
         self.avgpool = backbone.avgpool
         self.fc = nn.Linear(backbone.fc.in_features, num_classes)
