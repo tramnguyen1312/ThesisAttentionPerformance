@@ -16,8 +16,8 @@ def parse_arguments():
         description="Train model with various backbones, attention mechanisms, and configurations.")
 
     # Dataset and model arguments  
-    parser.add_argument("--dataset", type=str, default="STL10",
-                        choices=["STL10", "Caltech101", "Caltech256", "Oxford-IIIT Pets"],
+    parser.add_argument("--dataset", type=str, default="HAM10000",
+                        choices=["STL10", "Caltech101", "Caltech256", "Oxford-IIIT Pets", "HAM10000"],
                         help="Choose dataset to train on (default: STL10)")
     parser.add_argument("--image_size", type=int, default=224,
                         help="Image size for resizing (default: 224)")
@@ -75,18 +75,18 @@ def main():
 
     # Initialize train and test datasets  
     train_dataset = GeneralDataset(
-        data_type="train",
-        dataset_name=args.dataset,
+        split="train",
+        name=args.dataset,
         image_size=args.image_size,
-        image_path="./datasets/datasets",
-        random_seed=args.random_seed
+        root="./datasets/datasets",
+        seed=args.random_seed
     )
     test_dataset = GeneralDataset(
-        data_type="test",
-        dataset_name=args.dataset,
+        split="val",
+        name=args.dataset,
         image_size=args.image_size,
-        image_path="./datasets/datasets",
-        random_seed=args.random_seed
+        root="./datasets/datasets",
+        seed=args.random_seed
     )
     print(f"Total images in the train dataset: {len(train_dataset)}")
     print(f"Total images in the test dataset: {len(test_dataset)}")

@@ -1,372 +1,270 @@
-import torch
-import torchvision.transforms as transforms
-from torchvision.datasets import Caltech101, Caltech256, OxfordIIITPet, STL10
-from torch.utils.data import DataLoader, Subset
-import ssl
-from sklearn.model_selection import train_test_split
-
+import os
 import random
-import matplotlib.pyplot as plt
-import numpy as np
-
-
-def denormalize(image_tensor, mean, std):
-    """
-    Đảo ngược Normalize để chuyển ảnh về dải giá trị ban đầu ([0, 1] hoặc [0, 255]).
-    :param image_tensor: Ảnh dạng tensor (C, H, W).
-    :param mean: Danh sách giá trị mean sử dụng trong Normalize.
-    :param std: Danh sách giá trị std sử dụng trong Normalize.
-    :return: Ảnh dạng numpy array (H, W, C) dùng để plot.
-    """
-    image_tensor = image_tensor.clone()  # Tạo bản sao để tránh ảnh hưởng tensor gốc
-    for t, m, s in zip(image_tensor, mean, std):  # Áp dụng đảo ngược Normalize cho từng kênh
-        t.mul_(s).add_(m)  # t = t * std + mean
-    image_array = image_tensor.detach().numpy()  # Chuyển tensor thành numpy
-    image_array = np.transpose(image_array, (1, 2, 0))  # Chuyển trục từ (C, H, W) -> (H, W, C)
-    image_array = np.clip(image_array, 0, 1)  # Giới hạn giá trị trong [0, 1] để hiển thị ảnh
-    return image_array
-
+import ssl
+import zipfile
 
 import gdown
-import os
-import zipfile
-import ssl
+import numpy as np
+import pandas as pd
+import torch
+from PIL import Image
+from sklearn.model_selection import StratifiedShuffleSplit
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+import torchvision.transforms as transforms
+from torchvision.datasets import STL10, Caltech101, Caltech256, OxfordIIITPet
+import matplotlib.pyplot as plt
 
 
+# ----------------------- Utility Functions -----------------------
+def set_seed(seed: int = 42):
+    """
+    Set seed for reproducibility across modules.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def denormalize(image_tensor: torch.Tensor, mean: list, std: list) -> np.ndarray:
+    """
+    Denormalize a tensor image and convert to numpy array for plotting.
+    """
+    img = image_tensor.clone()
+    for channel, m, s in zip(img, mean, std):
+        channel.mul_(s).add_(m)
+    array = img.numpy().transpose(1, 2, 0)
+    return np.clip(array, 0, 1)
+
+
+# ----------------------- Dataset Downloader -----------------------
 class DatasetDownloader:
-    def __init__(self, dataset_name, output_dir="./datasets"):
-        """
-        Tải dữ liệu Caltech101 hoặc Caltech256 từ Google Drive nếu chưa có sẵn.
-        :param dataset_name: Tên dataset, có thể là 'Caltech101' hoặc 'Caltech256'.
-        :param output_dir: Thư mục lưu trữ dữ liệu.
-        """
-        self.dataset_name = dataset_name
+    """
+    Download and extract datasets from Google Drive based on predefined IDs.
+    """
+    DRIVE_IDS = {
+        "Caltech101": "1lmgZZ2QdDxXiXyrkNzzjvwb6GDwFplLN",
+        "Caltech256": "1Ou7A5FmPH6vJ5l-syt7geZhnljes0KEV",
+        "HAM10000": "1p3u5nVFX29CA4oaIrVPd8gtO4UwtxX9k",
+    }
+
+    def __init__(self, name: str, output_dir: str):
+        self.name = name
         self.output_dir = output_dir
-        self.url = self.get_download_url()
-
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
-
-        self.dataset_path = os.path.join(self.output_dir, f"{self.dataset_name}.zip")
-
-    def get_download_url(self):
-        """
-        Trả về URL tải xuống từ Google Drive cho dataset.
-        :return: URL tải xuống của dataset.
-        """
-        if self.dataset_name == "Caltech101":
-            return "https://drive.google.com/file/d/1lmgZZ2QdDxXiXyrkNzzjvwb6GDwFplLN/view?usp=sharing"
-        elif self.dataset_name == "Caltech256":
-            return "https://drive.google.com/file/d/1Ou7A5FmPH6vJ5l-syt7geZhnljes0KEV/view?usp=sharing"
-        else:
-            raise ValueError("Dataset không hợp lệ. Chỉ hỗ trợ 'Caltech101' và 'Caltech256'.")
-
-    def download(self):
-        """
-        Tải dataset từ Google Drive về.
-        """
-        if not os.path.exists(self.dataset_path):
-            print(f"Downloading {self.dataset_name} dataset...")
-            gdown.download(self.url, self.dataset_path, quiet=False, fuzzy=True)
-        else:
-            print(f"{self.dataset_name} dataset already exists.")
-
-    def extract(self):
-        """
-        Giải nén file ZIP sau khi tải xong.
-        """
-        if self.dataset_path.endswith(".zip"):
-            print(f"Extracting {self.dataset_name} dataset...")
-            with zipfile.ZipFile(self.dataset_path, 'r') as zip_ref:
-                zip_ref.extractall(self.output_dir)
-        else:
-            print(f"File {self.dataset_name}.zip không tồn tại hoặc không hợp lệ.")
+        os.makedirs(output_dir, exist_ok=True)
+        self.zip_path = os.path.join(output_dir, f"{name}.zip")
 
     def download_and_extract(self):
-        """
-        Tải về và giải nén dataset nếu chưa có sẵn.
-        """
-        self.download()
-        self.extract()
-        print(f"{self.dataset_name} dataset has been downloaded and extracted to {self.output_dir}")
+        drive_id = self.DRIVE_IDS.get(self.name)
+        if not drive_id:
+            return
 
-class GeneralDataset:
+        if not os.path.exists(self.zip_path):
+            url = f"https://drive.google.com/uc?id={drive_id}"
+            gdown.download(url, self.zip_path, quiet=False)
+
+        with zipfile.ZipFile(self.zip_path, 'r') as zip_ref:
+            zip_ref.extractall(self.output_dir)
+
+
+# ----------------------- General Dataset Class -----------------------
+class GeneralDataset(Dataset):
     """
-    General dataset class wrapper using torchvision.datasets.
-    Handles datasets like Caltech101. Automatically splits train/test.
+    Wrapper for various datasets with stratified train/validation split.
     """
+    def __init__(
+        self,
+        split: str,
+        name: str,
+        root: str,
+        image_size: int = 224,
+        val_size: float = 0.2,
+        seed: int = 42,
+    ):
+        set_seed(seed)
+        assert split in ['train', 'val'], "split must be 'train' or 'val'"
 
-    def __init__(self, data_type, dataset_name, image_size=224, image_path="", test_split=0.2, random_seed=42):
-        self.data_type = data_type  # 'train' hoặc 'test'
-        self.dataset_name = dataset_name
-        self.image_size = image_size
-        self.image_path = image_path
-        self.test_split = test_split  # Tỷ lệ dành cho tập test
-        self.random_seed = random_seed
+        self.split = split
+        self.name = name
+        self.root = root
+        self.val_size = val_size
 
-        if self.dataset_name in ["Caltech101", "Caltech256"]:
-            self.downloader = DatasetDownloader(dataset_name=self.dataset_name, output_dir=self.image_path)
-            self.downloader.download_and_extract()
+        # Download dataset if needed
+        if name in DatasetDownloader.DRIVE_IDS:
+            DatasetDownloader(name, root).download_and_extract()
 
-        # # Define transforms
+        # Load all images and labels to memory
+        self.images, self.labels = self._load_data()
+        assert self.images, f"No data for {name} in {root}"
 
-        # common_transform = transforms.Compose([
-        #     transforms.Resize((self.image_size, self.image_size)),
-        #     transforms.ToTensor(),
-        #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        # ])
-        # if self.data_type == "train":
-        #     self.transform = transforms.Compose([
-        #         common_transform,
-        #         transforms.RandomHorizontalFlip(p=0.5),
-        #         transforms.RandomRotation(degrees=(-25, 25)),
-        #         transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1),
-        #         transforms.GaussianBlur(kernel_size=(5, 5), sigma=(0.1, 2)),
-        #     ])
-        # else:
-        #     self.transform = common_transform
-        if self.data_type == "train":
-            self.transform = transforms.Compose([
-                transforms.RandomResizedCrop(image_size, scale=(0.7, 1.0)),
+        # Stratified split
+        indices = np.arange(len(self.labels))
+        splitter = StratifiedShuffleSplit(
+            n_splits=1, test_size=val_size, random_state=seed
+        )
+        train_idx, val_idx = next(splitter.split(indices, self.labels))
+        self.indices = train_idx if split == 'train' else val_idx
+
+        # Define transforms
+        self.transform = self._build_transform(image_size)
+
+        self.num_classes = len(set(self.labels))
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __getitem__(self, idx: int):
+        actual_idx = self.indices[idx]
+        image = self.images[actual_idx]
+        label = self.labels[actual_idx]
+        return self.transform(image), label
+
+    def _build_transform(self, size: int):
+        normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+        )
+
+        if self.split == 'train':
+            return transforms.Compose([
+                transforms.RandomResizedCrop(size, scale=(0.7, 1.0)),
                 transforms.RandomHorizontalFlip(p=0.5),
-                transforms.RandomRotation(10),  # slightly smaller angle
+                transforms.RandomRotation(10),
                 transforms.ColorJitter(0.3, 0.3, 0.2, 0.1),
                 transforms.RandomPerspective(distortion_scale=0.2, p=0.2),
                 transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0)),
-                transforms.RandAugment(num_ops=2, magnitude=9),  # adds AutoAugment-like ops
+                transforms.RandAugment(num_ops=2, magnitude=9),
                 transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]
-                ),
-                transforms.RandomErasing(p=0.2, scale=(0.02, 0.2), ratio=(0.3, 3.3))
+                normalize,
+                transforms.RandomErasing(p=0.2, scale=(0.02, 0.2), ratio=(0.3, 3.3)),
             ])
         else:
-            self.transform = transforms.Compose([
-                transforms.Resize(image_size + 32),
-                transforms.CenterCrop(image_size),
+            return transforms.Compose([
+                transforms.Resize(size + 32),
+                transforms.CenterCrop(size),
                 transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]
-                )
+                normalize,
             ])
 
-
-        # Load entire dataset
-        self.full_dataset = self._load_dataset()
-
-        self.num_classes = self._get_num_classes()
-
-        # Perform train/test split
-        self.indices = self._split_dataset()
-
-    def __len__(self):
-        return len(self.indices)
-
-    def __getitem__(self, idx):
-
-        actual_idx = self.indices[idx]
-        # Load ảnh và nhãn
-        image, label = self.full_dataset[actual_idx]
-        # Nếu ảnh không phải RGB, bỏ qua (có thể xuất hiện ảnh grayscale)
-        if image.mode != "RGB":
-            raise ValueError("Encountered a non-RGB image, which is unsupported.")
-
-        # Áp dụng transform
-        image = self.transform(image)
-
-        return image, label
-
-    def _load_dataset(self):
-        ssl._create_default_https_context = ssl._create_unverified_context
-        if self.dataset_name == ("Caltech101"):
-            return Caltech101(root=self.image_path, download=True, transform=None)
-        if self.dataset_name == ("Caltech256"):
-             return Caltech256(root=self.image_path, download=True, transform=None)
-        elif self.dataset_name == "STL10":
-            split = "unlabeled" if self.data_type == "unlabeled" else self.data_type
-            return STL10(root=self.image_path, split=split, download=True, transform=None)
-        elif self.dataset_name == "Oxford-IIIT Pets":
-            return OxfordIIITPet(root=self.image_path, download=True, transform=None)
-        else:
-            raise ValueError(f"Dataset {self.dataset_name} is not supported!")
-
-    def _load_custom_dataset(self, dataset_dir):
+    def _load_data(self):
         """
-        Hàm tùy chỉnh để tải dataset Caltech101 hoặc Caltech256 từ thư mục giải nén.
+        Dispatch loading strategy based on dataset name.
         """
-        from torchvision import datasets
-        from torchvision.transforms import ToTensor
+        if self.name in ['Caltech101', 'Caltech256', 'Oxford-IIIT Pets']:
+            return self._load_standard_via_torchvision()
+        if self.name == 'STL10':
+            return self._load_stl10()
+        if self.name == 'HAM10000':
+            return self._load_ham10000()
 
-        # Kiểm tra nếu thư mục dataset đã tồn tại
-        if not os.path.exists(dataset_dir):
-            raise ValueError(f"Dataset directory {dataset_dir} không tồn tại!")
-        return datasets.ImageFolder(root=dataset_dir, transform=ToTensor())
+        raise ValueError(f"Unknown dataset: {self.name}")
 
-    def _split_dataset(self):
-        # Lọc các chỉ số của ảnh RGB từ toàn bộ dataset
-        all_indices = [
-            idx for idx in range(len(self.full_dataset))
-            if self.full_dataset[idx][0].mode == "RGB"
+    def _load_standard_via_torchvision(self):
+        """
+        Load Caltech101, Caltech256, or Oxford-IIIT Pets entirely into memory.
+        """
+        loader_map = {
+            'Caltech101': Caltech101,
+            'Caltech256': Caltech256,
+            'Oxford-IIIT Pets': OxfordIIITPet,
+        }
+        ds_class = loader_map[self.name]
+        ds = ds_class(root=self.root, download=(self.name != 'Caltech101'))
+
+        images, labels = [], []
+        for img, lbl in ds:
+            images.append(img.convert('RGB'))
+            labels.append(lbl)
+        return images, labels
+
+    def _load_stl10(self):
+        """
+        Load STL10 into memory.
+        """
+        ds = STL10(root=self.root, split='train', download=True)
+        images, labels = [], []
+        for img, lbl in ds:
+            images.append(img.convert('RGB'))
+            labels.append(lbl)
+        return images, labels
+
+    def _load_ham10000(self):
+        """
+        Load HAM10000 using metadata CSV and image folders.
+        """
+        candidates = [
+            os.path.join(self.root, 'HAM10000_metadata.csv'),
+            os.path.join(self.root, 'HAM10000', 'HAM10000_metadata.csv'),
+        ]
+        meta_path = next((p for p in candidates if os.path.exists(p)), None)
+        assert meta_path, 'HAM10000 metadata missing'
+
+        base_dir = os.path.dirname(meta_path)
+        df = pd.read_csv(meta_path)
+        label_map = {dx: idx for idx, dx in enumerate(df['dx'].unique())}
+
+        dirs = [
+            os.path.join(base_dir, 'HAM10000_images_part_1'),
+            os.path.join(base_dir, 'HAM10000_images_part_2'),
+            base_dir,
         ]
 
-        # Train/Test Split
-        train_indices, test_indices = train_test_split(
-            all_indices, test_size=self.test_split, random_state=self.random_seed
-        )
+        images, labels = [], []
+        for _, row in df.iterrows():
+            filename = f"{row['image_id']}.jpg"
+            for d in dirs:
+                path = os.path.join(d, filename)
+                if os.path.exists(path):
+                    with Image.open(path) as img:
+                        images.append(img.convert('RGB'))
+                    labels.append(label_map[row['dx']])
+                    break
 
-        if self.data_type == "train":
-            return train_indices
-        elif self.data_type == "test":
-            return test_indices
-        else:
-            raise ValueError(f"Invalid data_type: {self.data_type}. Must be 'train' or 'test'.")
+        return images, labels
 
-    def _get_num_classes(self):
+    def get_sampler(self) -> WeightedRandomSampler:
         """
-        Get the number of classes in the dataset by checking unique labels.
+        Create a weighted sampler to handle class imbalance.
         """
-        all_labels = [self.full_dataset[idx][1] for idx in range(len(self.full_dataset))]
-        unique_labels = set(all_labels)  # Lấy danh sách các nhãn duy nhất
-        return len(unique_labels)  # Tổng số lớp
+        counts = np.bincount([self.labels[i] for i in self.indices])
+        weights = 1.0 / counts
+        sample_weights = [weights[self.labels[i]] for i in self.indices]
+        return WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
 
-    def print_indices(self):
+    def plot_random_images(self, num_images: int = 5):
         """
-        In toàn bộ chỉ số của dataset (train hoặc test).
+        Plot a grid of random images from the dataset split.
         """
-        print(f"Dataset type: {self.data_type}")
-        print(f"Total indices: {len(self.indices)}")
-        print("Indices:", self.indices)
+        num_images = min(num_images, len(self.indices))
+        choices = random.sample(list(self.indices), num_images)
 
-    def plot_random_images(self, num_images=5):
-        """
-        Hiển thị các ảnh ngẫu nhiên từ tập train/test, mỗi dòng tối đa 5 ảnh.
-        :param num_images: Số lượng ảnh cần hiển thị.
-        """
-        num_total_images = len(self.indices)
-        if num_total_images < num_images:
-            print(f"Warning: Dataset only contains {num_total_images} images. Showing all.")
-            num_images = num_total_images
-
-            # Chọn ngẫu nhiên các chỉ mục ảnh
-        random_indices = random.sample(range(num_total_images), num_images)
-
-        # Thiết lập số cột và số dòng trong grid
-        num_cols = 5  # Mỗi dòng tối đa 5 ảnh
-        num_rows = (num_images + num_cols - 1) // num_cols  # Tính số dòng cần thiết
-
-        # Thiết lập grid để hiển thị với matplotlib
-        fig, axes = plt.subplots(num_rows, num_cols, figsize=(15, 3 * num_rows))
-        mean = [0.485, 0.456, 0.406]  # Mean trong Normalize
-        std = [0.229, 0.224, 0.225]  # Std trong Normalize
-
-        # Flatten `axes` để duyệt dễ dàng (nó sẽ là mảng 2D nếu `num_rows > 1`)
+        cols = min(5, num_images)
+        rows = (num_images + cols - 1) // cols
+        fig, axes = plt.subplots(rows, cols, figsize=(15, 3 * rows))
         axes = axes.flatten()
 
-        # Hiển thị ảnh lên các subplot
-        for i, idx in enumerate(random_indices):
-            # Lấy ảnh và nhãn từ dataset
-            image, label = self[idx]
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
 
-            # Đảo ngược Normalize để hiển thị ảnh
-            denormalized_image = denormalize(image, mean, std)
+        for ax, idx in zip(axes, choices):
+            img_t, lbl = self.__getitem__(self.indices.tolist().index(idx))
+            ax.imshow(denormalize(img_t, mean, std))
+            ax.set_title(str(lbl))
+            ax.axis('off')
 
-            # Truyền ảnh và nhãn vào subplot
-            ax = axes[i]
-            ax.imshow(denormalized_image)
-            #ax.set_title(f"Label: {label}")
-            ax.axis("off")
+        for ax in axes[num_images:]:
+            ax.axis('off')
 
-            # Ẩn các ô thừa (trường hợp số ảnh không chia hết cho số cột)
-        for j in range(num_images, len(axes)):
-            axes[j].axis("off")
-
-            # Gọn layout và hiển thị
         plt.tight_layout()
         plt.show()
 
 
-def save_random_images(dataset, num_images=10, output_dir="./random_images"):
-    """
-    Lưu ngẫu nhiên `num_images` ảnh từ dataset với nhãn tương ứng.
-    :param dataset: Đối tượng dataset, kiểu GeneralDataset.
-    :param num_images: Số lượng ảnh cần lưu.
-    :param output_dir: Thư mục lưu trữ ảnh.
-    """
-    # Tạo thư mục lưu trữ nếu chưa tồn tại
-    import os
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Kiểm tra nếu số lượng ảnh trong tập dữ liệu nhỏ hơn `num_images`
-    if num_images > len(dataset.indices):
-        print(
-            f"Warning: Requested {num_images} images, but dataset only has {len(dataset.indices)}. Adjusting to {len(dataset.indices)}."
-        )
-        num_images = len(dataset.indices)
-
-    # Chọn ngẫu nhiên các chỉ mục ảnh từ tập
-    random_indices = random.sample(range(len(dataset.indices)), num_images)
-
-    # Giá trị mean và std từ Normalize
-    mean = [0.485, 0.456, 0.406]
-    std = [0.229, 0.224, 0.225]
-
-    for idx in random_indices:
-        # Lấy ảnh và nhãn qua __getitem__ của dataset
-        image, label = dataset[idx]
-
-        # Đảo ngược Normalize để lưu ảnh gốc
-        denormalized_image = denormalize(image, mean, std)
-
-        # Chuyển ảnh về dải giá trị từ [0, 1] -> [0, 255] và kiểu uint8
-        denormalized_image = (denormalized_image * 255).astype(np.uint8)
-
-        # Tạo tên file
-        filename = os.path.join(output_dir, f"label_{label}_idx_{idx}.jpg")
-
-        # Lưu ảnh
-        plt.imsave(filename, denormalized_image)
-        print(f"Saved: {filename}")
-
-    print(f"Saved {num_images} random images to {output_dir}")
-
-
+# ----------------------- Usage Example -----------------------
 if __name__ == '__main__':
-    # Tạo dataset
-    caltech101_train = GeneralDataset(
-        data_type="train",
-        dataset_name="Caltech101",
-        image_size=224,
-        image_path="./datasets",
-    )
-    caltech101_test = GeneralDataset(
-        data_type="test",
-        dataset_name="Caltech101",
-        image_size=224,
-        image_path="./datasets",
-    )
-    print(f"Total images in the train dataset: {len(caltech101_train)}")
-    print(f"Total images in the test dataset: {len(caltech101_test)}")
-    # Tạo DataLoader cho Caltech101
-    train_loader = DataLoader(
-        caltech101_train,
-        batch_size=32,
-        shuffle=True,  # Shuffle dataset
-        num_workers=0  # Để tránh lỗi đa luồng
-    )
-    train_loader = DataLoader(
-        caltech101_test,
-        batch_size=32,
-        shuffle=True,
-        num_workers=0
-    )
-    # caltech101_test.print_indices()
-    caltech101_train.plot_random_images(num_images=20)
-
-    # Load một batch dữ liệu
-    for batch_idx, (images, labels) in enumerate(train_loader):
-        print(f"Batch {batch_idx}: Images shape: {images.shape}, Labels shape: {labels.shape}")
-        break
-    # save_random_images(caltech101_test, num_images=10, output_dir="./images")
-
+    train_dataset = GeneralDataset('train', 'HAM10000', './datasets')
+    val_dataset = GeneralDataset('val', 'HAM10000', './datasets')
+    print(f"Total images in the train dataset: {len(train_dataset)}")
+    print(f"Total images in the test dataset: {len(val_dataset)}")
+    train_dataset.plot_random_images(num_images=10)
