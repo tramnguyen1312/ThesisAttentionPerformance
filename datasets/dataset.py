@@ -48,7 +48,7 @@ class DatasetDownloader:
     DRIVE_IDS = {
         "Caltech101": "1lmgZZ2QdDxXiXyrkNzzjvwb6GDwFplLN",
         "Caltech256": "1Ou7A5FmPH6vJ5l-syt7geZhnljes0KEV",
-        "HAM10000": "1w9mvotguE7OB0Ij62U8d3SoMVOnWjVDW",
+        "HAM10000": "1YgtSWc2tPP0qHIV-hf1qpJeLXAkmeV3O",
     }
 
     def __init__(self, name: str, output_dir: str):
