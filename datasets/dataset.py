@@ -142,7 +142,7 @@ class GeneralDataset(Dataset):
             ])
         else:
             return transforms.Compose([
-                # transforms.Resize(size + 32),
+                transforms.Resize(size),
                 # transforms.CenterCrop(size),
                 transforms.ToTensor(),
                 normalize,
