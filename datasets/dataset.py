@@ -142,8 +142,8 @@ class GeneralDataset(Dataset):
             ])
         else:
             return transforms.Compose([
-                transforms.Resize(size),
-                # transforms.CenterCrop(size),
+                transforms.Resize((size,size)),
+                transforms.CenterCrop(size),
                 transforms.ToTensor(),
                 normalize,
             ])
@@ -267,4 +267,11 @@ if __name__ == '__main__':
     val_dataset = GeneralDataset('val', 'HAM10000', './datasets')
     print(f"Total images in the train dataset: {len(train_dataset)}")
     print(f"Total images in the test dataset: {len(val_dataset)}")
-    val_dataset.plot_random_images(num_images=10)
+
+    img, label = val_dataset[0]
+    print("Val sample 0 – image shape:", img.shape, " label:", label)
+    img, label = train_dataset[0]
+    print("Train sample 0 – image shape:", img.shape, " label:", label)
+
+
+    #val_dataset.plot_random_images(num_images=10)
