@@ -84,7 +84,6 @@ class GeneralDataset(Dataset):
         val_size: float = 0.2,
         seed: int = 42,
     ):
-        set_seed(seed)
         assert split in ['train', 'val'], "split must be 'train' or 'val'"
 
         self.split = split

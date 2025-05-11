@@ -6,7 +6,19 @@ from attention import CBAMBlock, BAMBlock, scSEBlock
 from datasets import GeneralDataset
 from torch.utils.data import DataLoader
 from torchvision.models import vgg16
+import random, numpy as np, torch
 
+def set_seed(seed: int = 42):
+    """
+    Set seed for reproducibility across modules.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.benchmark = True
 
 def parse_arguments():
     """  
@@ -64,6 +76,8 @@ def parse_arguments():
 def main():
     # Parse arguments  
     args = parse_arguments()
+
+    random.seed(args.random_seed)
 
     # Print configurations for debugging  
     print("Training Configuration:")
