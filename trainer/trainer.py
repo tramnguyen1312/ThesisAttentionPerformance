@@ -8,6 +8,7 @@ from torch.optim.lr_scheduler import (
     StepLR,
     CosineAnnealingLR,
     CosineAnnealingWarmRestarts,
+
 LambdaLR
 )
 import tqdm
@@ -132,9 +133,11 @@ class DatasetTrainer(Trainer):
                                    momentum=0.9,
                                    weight_decay=self.weight_decay)
         elif self.optimizer_choice == "AdamW":
-            return torch.optim.AdamW(groups,
-                                     lr=self.learning_rate,
-                                     weight_decay=self.weight_decay)
+            return torch.optim.AdamW(
+                groups,
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay
+            )
         if self.optimizer_choice == "Adam":
             return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.optimizer_choice == "RAdam":
@@ -169,7 +172,7 @@ class DatasetTrainer(Trainer):
             return StepLR(self.optimizer, step_size=10, gamma=0.1)
         elif sched == "CosineAnnealingLR":
             return CosineAnnealingLR(self.optimizer, T_max=10,
-                                     eta_min=self.min_lr, verbose=True)
+                                     eta_min=self.min_lr)
         elif sched == "CosineAnnealingWarmRestarts":
             return CosineAnnealingWarmRestarts(
                 self.optimizer, T_0=10, T_mult=2,
