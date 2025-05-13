@@ -72,11 +72,9 @@ class GeneralDataset(Dataset):
 
     def __init__(
             self,
-            split: str,
             name: str,
             root: str,
     ):
-        assert split in ['train', 'val'], "split must be 'train' or 'val'"
         self.name = name
         self.root = root
 
@@ -347,7 +345,7 @@ def plot_label_histogram(
 
 # ----------------------- Usage Example -----------------------
 if __name__ == '__main__':
-    dataset = GeneralDataset('train', 'Caltech101', './datasets')
+    dataset = GeneralDataset('Caltech101', './datasets')
     train_dataset, val_dataset = dataset.get_splits(val_size=0.2, seed=42, image_size=224)
     print(f"Total images in the train dataset: {len(train_dataset)}")
     print(f"Total images in the test dataset: {len(val_dataset)}")

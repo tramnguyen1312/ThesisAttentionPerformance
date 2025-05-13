@@ -89,21 +89,10 @@ def main():
         # Set device
     device = args.device if torch.cuda.is_available() else "cpu"
 
-    # Initialize train and test datasets  
-    train_dataset = GeneralDataset(
-        split="train",
-        name=args.dataset,
-        image_size=args.image_size,
-        root="./datasets/datasets",
-        seed=args.random_seed
-    )
-    test_dataset = GeneralDataset(
-        split="val",
-        name=args.dataset,
-        image_size=args.image_size,
-        root="./datasets/datasets",
-        seed=args.random_seed
-    )
+    # Initialize train and test datasets
+    dataset = GeneralDataset(args.dataset, './datasets/datasets')
+    train_dataset, test_dataset = dataset.get_splits(val_size=0.2, seed=args.random_seed, image_size=args.image_size)
+
     print(f"Total images in the train dataset: {len(train_dataset)}")
     print(f"Total images in the test dataset: {len(test_dataset)}")
     print(f"Total classes: {train_dataset.num_classes}")
