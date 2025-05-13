@@ -29,7 +29,7 @@ def parse_arguments():
 
     # Dataset and model arguments  
     parser.add_argument("--dataset", type=str, default="HAM10000",
-                        choices=["STL10", "Caltech101", "Caltech256", "Oxford-IIIT Pets", "HAM10000"],
+                        choices=["STL10", "Caltech101", "Caltech256", "Oxford-IIIT Pets", "HAM10000", "ISIC2018"],
                         help="Choose dataset to train on (default: STL10)")
     parser.add_argument("--image_size", type=int, default=224,
                         help="Image size for resizing (default: 224)")
