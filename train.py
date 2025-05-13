@@ -66,6 +66,8 @@ def parse_arguments():
                         help="WandB project name (default: test-project)")
     parser.add_argument("--wandb_run", type=str, default="run-v1",
                         help="WandB run name (default: run-v1)")
+    parser.add_argument("--wandb_key", type=str, default="run-v1",
+                        help="WandB run api key")
     parser.add_argument("--checkpoint_path", type=str, default="best_model.pth",
                         help="Path to save the best model (default: best_model.pth)")
     parser.add_argument("--pre_train", action="store_true",help="Enable pre-training mode")
@@ -135,7 +137,7 @@ def main():
         "lr_scheduler": args.lr_scheduler,
         "max_epoch_num": args.max_epoch,
         "checkpoint_path": args.checkpoint_path,
-        "wandb_api_key": "94c506f92aea3ff024c35621dc85e7ee75194d12",
+        "wandb_api_key": args.wandb_key,
         "project_name": args.wandb_project,
         "run_name": args.wandb_run,
         "early_stopping_patience": args.early_stopping_patience,
