@@ -95,7 +95,7 @@ def main():
 
     print(f"Total images in the train dataset: {len(train_dataset)}")
     print(f"Total images in the test dataset: {len(test_dataset)}")
-    print(f"Total classes: {train_dataset.num_classes}")
+    print(f"Total classes: {dataset.num_classes}")
 
     # Create DataLoaders  
     train_loader = DataLoader(
