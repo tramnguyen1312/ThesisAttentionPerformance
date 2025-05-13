@@ -36,7 +36,7 @@ class DatasetDownloader:
         "Caltech101": "1lmgZZ2QdDxXiXyrkNzzjvwb6GDwFplLN",
         "Caltech256": "1Ou7A5FmPH6vJ5l-syt7geZhnljes0KEV",
         "HAM10000": "1YgtSWc2tPP0qHIV-hf1qpJeLXAkmeV3O",
-        "ISIC2018": "190EXwSP7QYy2NuAW9iJuHBQIialJ_JBQ",
+        "ISIC2018": "1vOprFTL0rGDVL1hUgiJi_9LGh9h1i84",
     }
 
     def __init__(self, name: str, output_dir: str):
