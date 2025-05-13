@@ -113,9 +113,9 @@ def main():
      # Select backbone model
     model = None
     if args.backbone == "VGG16":
-        model = VGG16(pretrained=args.pre_train, attn_type=args.attention, num_heads=8, num_classes=train_dataset.num_classes)
+        model = VGG16(pretrained=args.pre_train, attn_type=args.attention, num_heads=8, num_classes=dataset.num_classes)
     elif args.backbone == "ResNet18":
-        model = ResNet18(pretrained=args.pre_train, attn_type=args.attention, num_heads=8, num_classes=train_dataset.num_classes)
+        model = ResNet18(pretrained=args.pre_train, attn_type=args.attention, num_heads=8, num_classes=dataset.num_classes)
     configs = {
         "device": device,
         "batch_size": args.batch_size,
