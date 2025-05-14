@@ -110,12 +110,12 @@ def main():
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, sampler=sampler, num_workers=args.num_workers)
     # Create DataLoaders  
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers
-    )
+    # train_loader = DataLoader(
+    #     train_dataset,
+    #     batch_size=args.batch_size,
+    #     shuffle=True,
+    #     num_workers=args.num_workers
+    # )
     test_loader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
