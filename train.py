@@ -92,7 +92,7 @@ def main():
     device = args.device if torch.cuda.is_available() else "cpu"
 
     # Initialize train and test datasets
-    dataset = GeneralDataset(args.dataset, './datasets/datasets')
+    dataset = GeneralDataset(args.dataset, args.dataset_path)
     train_dataset, test_dataset = dataset.get_splits(val_size=0.2, seed=args.random_seed, image_size=args.image_size)
 
     print(f"Total images in the train dataset: {len(train_dataset)}")
