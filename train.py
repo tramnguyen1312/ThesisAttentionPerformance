@@ -100,18 +100,28 @@ def main():
     print(f"Total images in the test dataset: {len(test_dataset)}")
     print(f"Total classes: {dataset.num_classes}")
 
-    train_labels = [label for _, label in train_dataset.samples]
-    class_counts = np.bincount(train_labels)
-    class_weight = 1. / class_counts
-    sample_weights = [class_weight[label] for label in train_labels]
+    # Lấy danh sách nhãn từ train_ds
+    train_labels = [train_dataset.lbls[i] for i in range(len(train_dataset))]
 
-    sampler = WeightedRandomSampler(
+    class_counts = np.bincount(train_labels, minlength=train_dataset.num_classes)
+    class_weights = 1.0 / class_counts
+
+    sample_weights = [class_weights[label] for label in train_labels]
+
+    train_sampler = WeightedRandomSampler(
         weights=sample_weights,
-        num_samples=len(sample_weights),
+        num_samples=len(sample_weights),  # = len(train_ds)
         replacement=True
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, sampler=sampler, num_workers=args.num_workers)
+    # DataLoader cho train với sampler
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        sampler=train_sampler,
+        num_workers=args.num_workers
+    )
+
     #Create DataLoaders
     # train_loader = DataLoader(
     #     train_dataset,
