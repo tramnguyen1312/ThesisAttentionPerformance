@@ -156,7 +156,7 @@ class GeneralDataset(Dataset):
             return self._load_stl10()
         if self.name == 'HAM10000':
             return self._load_ham10000()
-        if self.name == 'ISIC2018':
+        if self.name == 'isic-2018-task-3':
             return self._load_isic2018()
 
         raise ValueError(f"Unknown dataset: {self.name}")
