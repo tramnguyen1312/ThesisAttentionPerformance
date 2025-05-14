@@ -104,7 +104,7 @@ def main():
     class_sample_count = np.array(
         [len(np.where(dataset.labels == t)[0]) for t in np.unique(dataset.labels)])
     weight = 1. / class_sample_count
-    samples_weight = np.array([weight[t] for t in train_dataset.labels])
+    samples_weight = np.array([weight[t] for t in dataset.labels])
     samples_weight = torch.from_numpy(samples_weight)
     sampler = WeightedRandomSampler(samples_weight.type('torch.DoubleTensor'), len(samples_weight))
 
