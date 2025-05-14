@@ -108,21 +108,31 @@ class GeneralDataset(Dataset):
         train_idx, val_idx = next(splitter.split(idx, labels))
 
         normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        # train_tf = transforms.Compose([
+        #     transforms.RandomResizedCrop(image_size, scale=(0.7, 1.0)),
+        #     transforms.RandomHorizontalFlip(p=0.5),
+        #     transforms.RandomRotation(10),
+        #     transforms.ColorJitter(0.3, 0.3, 0.2, 0.1),
+        #     transforms.RandomPerspective(0.2, p=0.2),
+        #     transforms.GaussianBlur(3, sigma=(0.1, 1.0)),
+        #     transforms.RandAugment(num_ops=2, magnitude=9),
+        #     transforms.ToTensor(),
+        #     normalize,
+        #     transforms.RandomErasing(p=0.2, scale=(0.02, 0.2), ratio=(0.3, 3.3)),
+        # ])
         train_tf = transforms.Compose([
-            transforms.RandomResizedCrop(image_size, scale=(0.7, 1.0)),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomRotation(10),
-            transforms.ColorJitter(0.3, 0.3, 0.2, 0.1),
-            transforms.RandomPerspective(0.2, p=0.2),
-            transforms.GaussianBlur(3, sigma=(0.1, 1.0)),
-            transforms.RandAugment(num_ops=2, magnitude=9),
+            transforms.Resize((image_size, image_size)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.RandomRotation(30),
+            transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1),
+            transforms.RandomAffine(translate=(0.1, 0.1), degrees=15),
             transforms.ToTensor(),
-            normalize,
-            transforms.RandomErasing(p=0.2, scale=(0.02, 0.2), ratio=(0.3, 3.3)),
+            normalize
         ])
         val_tf = transforms.Compose([
             transforms.Resize((image_size, image_size)),
-            transforms.CenterCrop(image_size),
+            #transforms.CenterCrop(image_size),
             transforms.ToTensor(),
             normalize,
         ])

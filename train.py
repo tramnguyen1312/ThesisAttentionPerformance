@@ -7,6 +7,7 @@ from datasets import GeneralDataset
 from torch.utils.data import DataLoader
 from torchvision.models import vgg16
 import random, numpy as np, torch
+from torch.utils.data import WeightedRandomSampler
 
 def set_seed(seed: int = 42):
     """
@@ -39,7 +40,7 @@ def parse_arguments():
     parser.add_argument("--attention", type=str, default="CBAM",
                         choices=["CBAM", "BAM", "scSE", "none"],
                         help="Choose an attention mechanism or none (default: CBAM)")
-    parser.add_argument("--num_workers", type=int, default=0,
+    parser.add_argument("--num_workers", type=int, default=4,
                         help="Number of workers for DataLoader (default: 0)")
 
     # Training hyperparameters  
@@ -99,6 +100,15 @@ def main():
     print(f"Total images in the test dataset: {len(test_dataset)}")
     print(f"Total classes: {dataset.num_classes}")
 
+
+    class_sample_count = np.array(
+        [len(np.where(train_dataset.labels == t)[0]) for t in np.unique(train_dataset.labels)])
+    weight = 1. / class_sample_count
+    samples_weight = np.array([weight[t] for t in train_dataset.labels])
+    samples_weight = torch.from_numpy(samples_weight)
+    sampler = WeightedRandomSampler(samples_weight.type('torch.DoubleTensor'), len(samples_weight))
+
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, sampler=sampler, num_workers=args.num_workers)
     # Create DataLoaders  
     train_loader = DataLoader(
         train_dataset,
