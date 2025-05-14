@@ -100,13 +100,16 @@ def main():
     print(f"Total images in the test dataset: {len(test_dataset)}")
     print(f"Total classes: {dataset.num_classes}")
 
+    train_labels = [label for _, label in train_dataset.samples]
+    class_counts = np.bincount(train_labels)
+    class_weight = 1. / class_counts
+    sample_weights = [class_weight[label] for label in train_labels]
 
-    class_sample_count = np.array(
-        [len(np.where(train_dataset.lbls == t)[0]) for t in np.unique(train_dataset.lbls)])
-    weight = 1. / class_sample_count
-    samples_weight = np.array([weight[t] for t in train_dataset.lbls])
-    samples_weight = torch.from_numpy(samples_weight)
-    sampler = WeightedRandomSampler(samples_weight.type('torch.DoubleTensor'), len(samples_weight))
+    sampler = WeightedRandomSampler(
+        weights=sample_weights,
+        num_samples=len(sample_weights),
+        replacement=True
+    )
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, sampler=sampler, num_workers=args.num_workers)
     #Create DataLoaders
