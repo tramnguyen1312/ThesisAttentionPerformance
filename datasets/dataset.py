@@ -50,18 +50,21 @@ class DatasetDownloader:
         if not drive_id:
             return
 
-        if not os.path.exists(self.zip_path):
-            url = f"https://drive.google.com/uc?id={drive_id}"
-            gdown.download(url, self.zip_path, quiet=False)
+        if not os.path.exists( os.path.join(self.output_dir, self.name)):
+            if not os.path.exists(self.zip_path):
+                url = f"https://drive.google.com/uc?id={drive_id}"
+                gdown.download(url, self.zip_path, quiet=False)
 
-        print(f"Extracting {self.name}...")
-        with zipfile.ZipFile(self.zip_path, 'r') as zip_ref:
-            for member in tqdm(zip_ref.namelist(), desc=f"Extracting {self.name}", unit="file"):
-                # skip macOS metadata
-                if '__MACOSX' in member:
-                    continue
-                # extract actual dataset files
-                zip_ref.extract(member, self.output_dir)
+            print(f"Extracting {self.name}...")
+            with zipfile.ZipFile(self.zip_path, 'r') as zip_ref:
+                for member in tqdm(zip_ref.namelist(), desc=f"Extracting {self.name}", unit="file"):
+                    # skip macOS metadata
+                    if '__MACOSX' in member:
+                        continue
+                    # extract actual dataset files
+                    zip_ref.extract(member, self.output_dir)
+        else:
+            print('Dataset đã tồn tại')
 
 
 # ----------------------- General Dataset Class -----------------------

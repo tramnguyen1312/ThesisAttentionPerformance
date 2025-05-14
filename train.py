@@ -29,7 +29,7 @@ def parse_arguments():
 
     # Dataset and model arguments  
     parser.add_argument("--dataset", type=str, default="HAM10000",
-                        choices=["STL10", "Caltech101", "Caltech256", "Oxford-IIIT Pets", "HAM10000", "ISIC2018"],
+                        choices=["STL10", "Caltech101", "Caltech256", "Oxford-IIIT Pets", "HAM10000", "isic-2018-task-3"],
                         help="Choose dataset to train on (default: STL10)")
     parser.add_argument("--image_size", type=int, default=224,
                         help="Image size for resizing (default: 224)")
@@ -71,6 +71,8 @@ def parse_arguments():
     parser.add_argument("--checkpoint_path", type=str, default="best_model.pth",
                         help="Path to save the best model (default: best_model.pth)")
     parser.add_argument("--pre_train", action="store_true",help="Enable pre-training mode")
+    parser.add_argument("--dataset_path", type=str, default="best_model.pth",
+                        help="Path to save the best model (default: best_model.pth)")
 
     return parser.parse_args()
 
