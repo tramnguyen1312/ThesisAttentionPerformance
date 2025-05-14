@@ -143,6 +143,7 @@ class GeneralDataset(Dataset):
                 self.lbls = lbls
                 self.indices = indices
                 self.tf = tf
+                self.num_classes = len(set(self.lbls))
 
             def __len__(self):
                 return len(self.indices)
@@ -154,6 +155,7 @@ class GeneralDataset(Dataset):
 
         train_ds = SubsetMemDataset(self.images, self.labels, train_idx, train_tf)
         val_ds = SubsetMemDataset(self.images, self.labels, val_idx, val_tf)
+
         return train_ds, val_ds
 
     def _load_data(self):
@@ -362,6 +364,7 @@ if __name__ == '__main__':
     train_dataset, val_dataset = dataset.get_splits(val_size=0.2, seed=42, image_size=224)
     print(f"Total images in the train dataset: {len(train_dataset)}")
     print(f"Total images in the test dataset: {len(val_dataset)}")
+    print(train_dataset.num_classes)
 
     img, label = val_dataset[0]
     print("Val sample 0 – image shape:", img.shape, " label:", label)
