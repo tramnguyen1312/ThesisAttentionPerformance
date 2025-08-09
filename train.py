@@ -119,8 +119,12 @@ def measure_computational_cost(model, input_tensor, device):
                 fusion_type=getattr(model, 'fusion_type', 'multiply') if hasattr(model, 'fusion_type') else 'multiply'
             )
             model_copy.eval()
+            model_copy = model_copy.to(device)  # Move to same device
             
-            flops, params = profile(model_copy, inputs=(input_tensor,), verbose=False)
+            # Create input on same device as model
+            input_tensor_cpu = torch.randn(1, 3, input_tensor.shape[2], input_tensor.shape[3])
+            
+            flops, params = profile(model_copy, inputs=(input_tensor_cpu,), verbose=False)
             flops_formatted, params_formatted = clever_format([flops, params], "%.3f")
             results['flops'] = flops
             results['flops_formatted'] = flops_formatted
@@ -130,6 +134,8 @@ def measure_computational_cost(model, input_tensor, device):
             print(f"FLOP analysis failed: {e}")
             results['flops'] = "N/A"
             results['flops_formatted'] = "N/A"
+            results['params'] = "N/A"
+            results['params_formatted'] = "N/A"
             
     # Manual parameter count
     total_params = sum(p.numel() for p in model.parameters())
@@ -373,9 +379,11 @@ def main():
             print(f"Total Parameters: {comp_results['total_params']:,}")
             print(f"Trainable Parameters: {comp_results['trainable_params']:,}")
             
-            if THOP_AVAILABLE and 'flops_formatted' in comp_results:
+            if THOP_AVAILABLE and 'flops_formatted' in comp_results and comp_results['flops_formatted'] != "N/A":
                 print(f"FLOPs: {comp_results['flops_formatted']}")
                 print(f"Parameters (thop): {comp_results['params_formatted']}")
+            else:
+                print("FLOPs: Analysis failed or unavailable")
             
             print(f"Average Inference Time: {comp_results['inference_time_ms']:.2f} ms")
             print(f"Memory Usage: {comp_results['memory_usage_mb']:.2f} MB")
