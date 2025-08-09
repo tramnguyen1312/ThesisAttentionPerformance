@@ -36,7 +36,13 @@ def run_experiment(config, description=""):
     cmd = ['python', 'train.py']
     for key, value in config.items():
         if value is not None:
-            cmd.extend([f'--{key}', str(value)])
+            if isinstance(value, bool):
+                if value:  # Only add flag if True
+                    cmd.append(f'--{key}')
+                # If False, don't add the flag at all
+            else:
+                # Regular arguments with values
+                cmd.extend([f'--{key}', str(value)])
     
     # Print command for verification
     print("Command:", ' '.join(cmd))
