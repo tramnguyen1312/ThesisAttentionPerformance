@@ -6,13 +6,14 @@ from .scSE import scSEBlock
 
 class GLSABlock(nn.Module):
     """
-    MHA → Stacked Attention block.
+    GLA-Block: Global-Local Attention Block
     - projects X→Q,K,V via 1×1 conv
-    - performs multi-head self-attention
+    - performs multi-head self-attention (global)
     - residual + LayerNorm
-    - followed by one of {CBAM, BAM, scSE}
+    - followed by one of {CBAM, BAM, scSE} (local)
+    - fusion of global and local attention
     """
-    def __init__(self, channels, num_heads=8, attn_type='cbam', reduction_ratio=16, kernel_size=7):
+    def __init__(self, channels, num_heads=8, attn_type='CBAM', reduction_ratio=16, kernel_size=7, fusion_type='multiply'):
         super().__init__()
         self.C = channels
         self.to_qkv = nn.Conv2d(channels, channels * 3, kernel_size=1, bias=False)
@@ -30,6 +31,7 @@ class GLSABlock(nn.Module):
         else:
             raise ValueError(f"Unknown attn_type: {attn_type}")
         self.bn_out = nn.BatchNorm2d(channels)
+        self.fusion_type = fusion_type
         self.gamma = nn.Parameter(torch.zeros(1))
 
         self.hook_x = nn.Identity()
@@ -38,8 +40,11 @@ class GLSABlock(nn.Module):
         self.hook_out = nn.Identity()
         self.hook_res = nn.Identity()
 
-        # 1x1 conv để reprojection sau fusion
-        self.to_out_conv = nn.Conv2d(channels, channels, kernel_size=1, bias=False)
+        # Fusion reprojection conv
+        if fusion_type == 'concat':
+            self.to_out_conv = nn.Conv2d(channels * 2, channels, kernel_size=1, bias=False)
+        else:  # multiply
+            self.to_out_conv = nn.Conv2d(channels, channels, kernel_size=1, bias=False)
 
     def forward(self, x):
         # x = self.hook_x(x)
@@ -89,8 +94,12 @@ class GLSABlock(nn.Module):
         L = self.attn2(f1)  # L = f2
         L = self.hook_f2(L)
 
-        # 3) Multiplicative Fusion
-        fuse = A * L  # element-wise
+        # 3) Global-Local Fusion
+        if self.fusion_type == 'concat':
+            fuse = torch.cat([A, L], dim=1)  # [B, 2C, H, W] 
+        else:  # multiply (default)
+            fuse = A * L  # element-wise multiplication [B, C, H, W]
+        
         # reprojection
         R = self.to_out_conv(fuse)  # G
         R = self.hook_res(R)
@@ -99,3 +108,54 @@ class GLSABlock(nn.Module):
         out = x_in + R
         out = self.hook_out(out)
         return out
+
+
+class MHAOnlyBlock(nn.Module):
+    """
+    MHA-only variant for ablation study (no lightweight attention)
+    """
+    def __init__(self, channels, num_heads=8):
+        super().__init__()
+        self.C = channels
+        self.to_qkv = nn.Conv2d(channels, channels * 3, kernel_size=1, bias=False)
+        self.mha = nn.MultiheadAttention(embed_dim=channels, num_heads=num_heads, batch_first=True, bias=False)
+        self.norm = nn.LayerNorm(channels)
+        self.to_out_conv = nn.Conv2d(channels, channels, kernel_size=1, bias=False)
+        
+    def forward(self, x):
+        B, C, H, W = x.shape
+        
+        # Multi-Head Self-Attention only
+        qkv = self.to_qkv(x)
+        q, k, v = qkv.chunk(3, dim=1)
+        q = q.flatten(2).permute(0, 2, 1)
+        k = k.flatten(2).permute(0, 2, 1)
+        v = v.flatten(2).permute(0, 2, 1)
+        
+        attn_out, _ = self.mha(q, k, v)
+        attn_out = self.norm(attn_out + q)
+        A = attn_out.permute(0, 2, 1).view(B, C, H, W)
+        
+        # Direct reprojection (no local attention)
+        R = self.to_out_conv(A)
+        return x + R
+
+
+class LightweightOnlyBlock(nn.Module):
+    """
+    Lightweight attention only (CBAM/BAM/scSE) for ablation study (no MHA)
+    """
+    def __init__(self, channels, attn_type='CBAM', reduction_ratio=16):
+        super().__init__()
+        if attn_type == 'CBAM':
+            self.attn = CBAMBlock(channel=channels, reduction=reduction_ratio, kernel_size=7)
+        elif attn_type == 'BAM':
+            self.attn = BAMBlock(channel=channels, reduction=reduction_ratio)
+        elif attn_type == 'scSE':
+            self.attn = scSEBlock(channel=channels, reduction_ratio=reduction_ratio)
+        else:
+            raise ValueError(f"Unknown attn_type: {attn_type}")
+        
+    def forward(self, x):
+        # Only lightweight attention, no MHA
+        return self.attn(x)
