@@ -81,8 +81,8 @@ class GeneralDataset(Dataset):
         self.name = name
         self.root = root
 
-        # Download dataset if needed
-        if name in DatasetDownloader.DRIVE_IDS:
+        # Download dataset if needed (skip if already exists)
+        if name in DatasetDownloader.DRIVE_IDS and not self._dataset_exists():
             DatasetDownloader(name, root).download_and_extract()
 
         # Load all images and labels to memory
@@ -90,6 +90,23 @@ class GeneralDataset(Dataset):
         assert self.images, f"No data for {name} in {root}"
 
         self.num_classes = len(set(self.labels))
+    
+    def _dataset_exists(self):
+        """Check if dataset files already exist to skip downloading"""
+        if self.name == 'HAM10000':
+            # Check for HAM10000 metadata file
+            candidates = [
+                os.path.join(self.root, 'HAM10000_metadata.csv'),
+                os.path.join(self.root, 'HAM10000', 'HAM10000_metadata.csv'),
+            ]
+            return any(os.path.exists(p) for p in candidates)
+        elif self.name == 'ISIC2018':
+            # Check for ISIC2018 metadata file  
+            for root, dirs, files in os.walk(self.root):
+                if 'ISIC2018_Task3_Training_GroundTruth.csv' in files:
+                    return True
+            return False
+        return False
 
     def get_splits(
             self,
