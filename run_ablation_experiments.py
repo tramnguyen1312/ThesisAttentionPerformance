@@ -65,10 +65,19 @@ def create_config(dataset, backbone, attention, fusion_type=None,
                  special_flags=None, max_epoch=None, wandb_suffix=""):
     """Create experiment configuration"""
     config = BASE_CONFIG.copy()
+    
+    # Set dataset-specific paths for Kaggle
+    dataset_path = '/kaggle/input/'
+    if dataset == 'HAM10000':
+        dataset_path = '/kaggle/input/ham10000/HAM10000'
+    elif dataset == 'isic-2018-task-3':
+        dataset_path = '/kaggle/input/isic-2018-task-3'
+    
     config.update({
         'dataset': dataset,
         'backbone': backbone,
         'attention': attention,
+        'dataset_path': dataset_path,
         'wandb_project': f'GLSBLOCK_ABLATION_{backbone}_{attention}_{dataset}',
         'wandb_run': f'ablation_{attention}_{backbone}_{dataset.lower()}_{wandb_suffix}'
     })
